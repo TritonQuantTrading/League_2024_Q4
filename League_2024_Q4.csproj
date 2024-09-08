@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+        <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+        <TargetFramework>net6.0</TargetFramework>
+        <OutputPath>bin/$(Configuration)</OutputPath>
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+        <DefaultItemExcludes>$(DefaultItemExcludes);backtests/*/code/**;live/*/code/**;optimizations/*/code/**</DefaultItemExcludes>
+        <NoWarn>CS0618</NoWarn>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="QuantConnect.Lean" Version="2.5.*"/>
+        <PackageReference Include="QuantConnect.DataSource.Libraries" Version="2.5.*"/>
+    </ItemGroup>
+</Project>
