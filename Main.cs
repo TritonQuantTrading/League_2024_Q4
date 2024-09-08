@@ -63,25 +63,45 @@ namespace QuantConnect.Algorithm.CSharp
 
         public override void Initialize()
         {
-            // Locally Lean installs free sample data, to download more data please visit https://www.quantconnect.com/docs/v2/lean-cli/datasets/downloading-data
-            SetStartDate(2013, 10, 7); // Set Start Date
-            SetEndDate(2013, 10, 11); // Set Start Date
-            SetCash(100000);             //Set Strategy Cash
+            SetStartDate(2015, 01, 01);
+            SetEndDate(2015, 12, 01);
+            SetCash(100000);
 
-            AddEquity("SPY", Resolution.Minute);
-
+            UniverseSettings.Asynchronous = true;
+            
+            SetUniverseSelection(new Top500());
+            AddAlpha(new EmaCrossAlphaModel());
+			SetPortfolioConstruction(new EqualWeightingPortfolioConstructionModel());
+			AddRiskManagement(new TrailingStopRiskManagementModel());
+			SetExecution(new VolumeWeightedAveragePriceExecutionModel());
         }
 
-        /// OnData event is the primary entry point for your algorithm. Each new data point will be pumped in here.
-        /// Slice object keyed by symbol containing the stock data
-        public override void OnData(Slice data)
-        {
-            if (!Portfolio.Invested)
-            {
-                SetHoldings("SPY", 1);
-                Debug("Purchased Stock");
-            }
-        }
+        private class Top500 : FundamentalUniverseSelectionModel
+		{
+			public override IEnumerable<Symbol> Select(QCAlgorithm algorithm, IEnumerable<Fundamental> fundamental)
+			{
+				return fundamental.Where(x => x.HasFundamentalData)
+					.OrderByDescending(x => x.MarketCap)
+					.Take(500)
+					.Select(x => x.Symbol);
+			}
+		}
 
+        private class CustomAlphaModel : AlphaModel
+		{
+			public override IEnumerable<Insight> Update(QCAlgorithm algorithm, Slice data)
+			{
+				var insights = new List<Insight>();
+				return insights;
+			}
+
+			public override void OnSecuritiesChanged(QCAlgorithm algorithm, SecurityChanges changes)
+			{
+				// changes.AddedSecurities
+				// changes.RemovedSecurities
+			}
+
+			// public override string Name { get; }
+		}
     }
 }
