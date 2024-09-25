@@ -79,7 +79,7 @@ namespace QuantConnect.Algorithm.CSharp
         public const decimal PAdjustmentStep = 1.0M;
         public const int PNPortfolios = 1000;
         public const int PShortLookback = 63;
-        public const int PRandSeed = 13;
+        public const int PRandSeed = 10; // 18, 2, 4, 10, 11
         public const string PAdjustmentFrequency = "monthly"; // can be "daily", "weekly", "bi-weekly", "monthly"
         // Private fields
         private Dictionary<Symbol, MomentumPercent> _momp;
@@ -172,7 +172,7 @@ namespace QuantConnect.Algorithm.CSharp
             }
             else if (PAdjustmentFrequency.Equals("monthly"))
             {
-                // TODO: looks like the initial date is not being used
+                // TODO: It looks like the initial date is not being used
                 if (initial)
                 {
                     var nextMonth = currentDate.AddDays(32);
@@ -217,29 +217,29 @@ namespace QuantConnect.Algorithm.CSharp
                 drop_pct = ((this.highest_profit_pct - current_profit_pct_to_start) / this.highest_profit_pct) * 100;
             }
 
-            // if (current_profit_pct_to_start <= -12 && !this.global_stop_loss_triggered)
-            // {
-            //     var current_date = Time.ToString(DateFormat);
-            //     Log($"{current_date}: Liquidating all holdings due to a portfolio loss of {current_profit_pct_to_start:.2f}% (stop-loss from last adjustment).");
-            //     Liquidate();
-            //     this._rebalance = false;  // Don't allow immediate rebalancing
-            //     this.global_stop_loss_triggered = true;
-            //     this.highest_profit_pct = 0;
-            //     this.monthly_starting_equity = 0;
-            //     this.next_adjustment_date = GetNextAdjustmentDate(Time);
-            //     Log($"{current_date}: Stopping trading temporarily due to stop-loss trigger.");
-            //     return;
-            // }
+            if (current_profit_pct_to_start <= -12 && !this.global_stop_loss_triggered)
+            {
+                var current_date = Time.ToString(DateFormat);
+                Log($"{current_date}: Liquidating all holdings due to a portfolio loss of {current_profit_pct_to_start:F2}% (stop-loss from last adjustment).");
+                // Liquidate(); // It looks like we should not liquidate here
+                this._rebalance = false;  // Don't allow immediate rebalancing
+                this.global_stop_loss_triggered = true;
+                this.highest_profit_pct = 0;
+                this.monthly_starting_equity = 0;
+                this.next_adjustment_date = GetNextAdjustmentDate(Time);
+                Log($"{current_date}: Stopping trading temporarily due to stop-loss trigger.");
+                return;
+            }
 
 
             if (this.highest_profit_pct > 10 && drop_pct >= 10)
             {
-                // var current_date = Time.ToString(DateFormat);
-                // Log($"{current_date}: Liquidating all holdings due to a {drop_pct:.2f}% drop in profit (take-profit).");
-                // Log($"{current_date}: Highest Net Profit: {this.highest_profit_pct:.2f}% (from last adjustment)");
-                // Log($"{current_date}: Current Net Profit: {current_profit_pct_to_start:.2f}% (from last adjustment)");
-                // var total_profit_pct = ((current_portfolio_value - InitialCash) / InitialCash) * 100;
-                // Log($"{current_date}: Total Net Profit: {total_profit_pct:.2f}% (from inception)");
+                var current_date = Time.ToString(DateFormat);
+                Log($"{current_date}: Liquidating all holdings due to a {drop_pct:F2}% drop in profit (take-profit).");
+                Log($"{current_date}: Highest Net Profit: {this.highest_profit_pct:F2}% (from last adjustment)");
+                Log($"{current_date}: Current Net Profit: {current_profit_pct_to_start:F2}% (from last adjustment)");
+                var total_profit_pct = ((current_portfolio_value - InitialCash) / InitialCash) * 100;
+                Log($"{current_date}: Total Net Profit: {total_profit_pct:F2}% (from inception)");
                 Liquidate();
                 this._rebalance = true;  // Allow immediate rebalancing
                 this.global_stop_loss_triggered = true;
@@ -265,14 +265,14 @@ namespace QuantConnect.Algorithm.CSharp
                 var holdings_value = Portfolio.Values.Where(sec => sec.Invested).Sum(sec => sec.HoldingsValue);
                 var unrealized_profit = Portfolio.TotalUnrealizedProfit;
                 var return_pct = (net_profit / InitialCash) * 100;
-                Log($"{current_date}: Equity: ${portfolio_value:.2f} | Holdings: ${holdings_value:.2f} | Net Profit: ${net_profit:.2f} | Unrealized: ${unrealized_profit:.2f} | Return: {return_pct:.2f}%");
+                Log($"{current_date}: Equity: ${portfolio_value:F2} | Holdings: ${holdings_value:F2} | Net Profit: ${net_profit:F2} | Unrealized: ${unrealized_profit:F2} | Return: {return_pct:F2}%");
                 this.last_logged_month = Time.Month;
 
                 if (this.halved_lookback)
                 {
-                    this._lookback = PLookback;  // Restore the original lookback period
-                    this._short_lookback = PShortLookback;  // Restore the original short lookback period
-                    this.halved_lookback = false;  // Reset the halved lookback flag
+                    this._lookback = PLookback;
+                    this._short_lookback = PShortLookback;
+                    this.halved_lookback = false;
                 }
             }
 
@@ -281,11 +281,11 @@ namespace QuantConnect.Algorithm.CSharp
                 return;
             }
 
-            // if (this._rebalance)
-            // {
-            //     this.global_stop_loss_triggered = false;
-            //     this._rebalance = false;
-            // }
+            if (this._rebalance)
+            {
+                this.global_stop_loss_triggered = false;
+                this._rebalance = false;
+            }
 
             var sorted_mom = (from kvp in this._momp
                               where kvp.Value.IsReady
@@ -349,14 +349,12 @@ namespace QuantConnect.Algorithm.CSharp
             var current_symbols = Portfolio.Keys.ToHashSet();
             var target_symbols = this.target_weights.Keys.ToHashSet();
 
-            // Liquidate removed symbols
             var removed_symbols = current_symbols.Except(target_symbols);
             foreach (var symbol in removed_symbols)
             {
                 Liquidate(symbol);
             }
 
-            // Adjust holdings for selected symbols
             foreach (var kvp in this.target_weights)
             {
                 var symbol = kvp.Key;
@@ -370,27 +368,28 @@ namespace QuantConnect.Algorithm.CSharp
                 SetHoldings(symbol, adjusted_weight);
             }
 
-            // var holdings = new Dictionary<string, decimal>();
-            // var sum_of_all_holdings = 0M;
-            // foreach (var symbol in Portfolio.Keys)
-            // {
-            //     var holding_percentage = Portfolio[symbol].HoldingsValue / Portfolio.TotalPortfolioValue * 100;
-            //     if (holding_percentage.IsGreaterThan(NearZeroPct))
-            //     {
-            //         sum_of_all_holdings += holding_percentage;
-            //         holdings[symbol.Value] = Math.Round(holding_percentage, 2);
-            //     }
-            // }
-            // var current_date = Time.ToString(DateFormat);
-            // Log($"{current_date}: Final holdings [{sum_of_all_holdings:.2f}%]: {holdings}");
+            var holdings = new Dictionary<string, decimal>();
+            var sum_of_all_holdings = 0M;
+            foreach (var symbol in Portfolio.Keys)
+            {
+                var holding_percentage = Portfolio[symbol].HoldingsValue / Portfolio.TotalPortfolioValue * 100;
+                if (holding_percentage.IsGreaterThan(NearZeroPct))
+                {
+                    sum_of_all_holdings += holding_percentage;
+                    holdings[symbol.Value] = Math.Round(holding_percentage, 2);
+                }
+            }
+            var current_date = Time.ToString(DateFormat);
+            Log($"{current_date}: Final holdings [{sum_of_all_holdings:F2}%]: {holdings}");
         }
-
 
         public List<decimal> OptimizePortfolio(List<Symbol> selectedSymbols)
         {
             var shortLookback = this._short_lookback;
 
-            var history = History(selectedSymbols, shortLookback, Resolution.Daily)
+            var historySlices = History(selectedSymbols, shortLookback, Resolution.Daily);
+
+            var history = historySlices
                 .SelectMany(slice => slice.Bars)
                 .GroupBy(bar => bar.Key)
                 .ToDictionary(
@@ -398,15 +397,39 @@ namespace QuantConnect.Algorithm.CSharp
                     group => group.Select(g => (double)g.Value.Close).ToList()
                 );
 
-            var returnsDict = selectedSymbols.ToDictionary(
-                symbol => symbol,
-                symbol => history[symbol]
-                    .Select((price, index) => index == 0 ? 0.0 : (price - history[symbol][index - 1]) / history[symbol][index - 1])
-                    .Skip(1) // Skip the first return as it's zero
-                    .ToList()
-            );
+            var returnsDict = new Dictionary<Symbol, List<double>>();
+            foreach (var symbol in selectedSymbols)
+            {
+                if (!history.ContainsKey(symbol))
+                {
+                    Log($"[OptimizePortfolio] Missing historical data for {symbol.Value}. Skipping this symbol.");
+                    continue;
+                }
 
-            int nAssets = selectedSymbols.Count;
+                var closePrices = history[symbol];
+                if (closePrices.Count < shortLookback)
+                {
+                    Log($"[OptimizePortfolio] Insufficient historical data for {symbol.Value}. Required: {shortLookback}, Available: {closePrices.Count}. Skipping this symbol.");
+                    continue;
+                }
+
+                var returns = closePrices
+                    .Select((price, index) => index == 0 ? 0.0 : (price - closePrices[index - 1]) / closePrices[index - 1])
+                    .Skip(1) // Skip the first return as it's zero
+                    .ToList();
+
+                returnsDict[symbol] = returns;
+            }
+
+            var validSymbols = returnsDict.Keys.ToList();
+            int nAssets = validSymbols.Count;
+
+            if (nAssets == 0)
+            {
+                Log("[OptimizePortfolio] No valid symbols with sufficient historical data. Returning empty weights.");
+                return new List<decimal>();
+            }
+
             int nPortfolios = PNPortfolios;
 
             var portfolioReturns = new double[nPortfolios];
@@ -419,18 +442,16 @@ namespace QuantConnect.Algorithm.CSharp
             {
                 for (int j = 0; j < shortLookback - 1; j++)
                 {
-                    returnsMatrix[i, j] = returnsDict[selectedSymbols[i]][j];
+                    returnsMatrix[i, j] = returnsDict[validSymbols[i]][j];
                 }
             }
 
-            // Compute the covariance matrix
             var covarianceMatrix = returnsMatrix * returnsMatrix.Transpose() / (shortLookback - 2);
 
             var random = new Random(PRandSeed);
 
             for (int i = 0; i < nPortfolios; i++)
             {
-                // Generate random weights
                 var weights = new List<decimal>(nAssets);
                 double sumWeights = 0.0;
                 for (int j = 0; j < nAssets; j++)
@@ -440,7 +461,6 @@ namespace QuantConnect.Algorithm.CSharp
                     sumWeights += w;
                 }
 
-                // Normalize the weights to sum to 1
                 for (int j = 0; j < nAssets; j++)
                 {
                     weights[j] = weights[j] / (decimal)sumWeights;
@@ -448,22 +468,20 @@ namespace QuantConnect.Algorithm.CSharp
 
                 var weightsVector = Vector<double>.Build.Dense(nAssets, idx => (double)weights[idx]);
 
-                // Calculate portfolio return: weighted sum of average returns
                 double portfolioReturn = 0.0;
                 for (int j = 0; j < nAssets; j++)
                 {
-                    portfolioReturn += returnsDict[selectedSymbols[j]].Average() * weightsVector[j];
+                    portfolioReturn += returnsDict[validSymbols[j]].Average() * weightsVector[j];
                 }
                 portfolioReturn *= shortLookback;
 
                 double portfolioVariance = weightsVector * covarianceMatrix * weightsVector;
                 double portfolioStdDev = Math.Sqrt(portfolioVariance);
 
-                // Calculate downside deviation
                 double downsideSum = 0.0;
                 for (int j = 0; j < nAssets; j++)
                 {
-                    var symbolReturns = returnsDict[selectedSymbols[j]];
+                    var symbolReturns = returnsDict[validSymbols[j]];
                     foreach (var r in symbolReturns)
                     {
                         if (r < 0)
@@ -483,6 +501,13 @@ namespace QuantConnect.Algorithm.CSharp
             }
 
             int bestSortinoIndex = Array.IndexOf(sortinoRatios, sortinoRatios.Max());
+
+            if (bestSortinoIndex < 0 || bestSortinoIndex >= weightsRecord.Count)
+            {
+                Log("[OptimizePortfolio] Unable to determine the best Sortino index. Returning equal weights.");
+                var equalWeights = Enumerable.Repeat(1.0M / nAssets, nAssets).ToList();
+                return equalWeights;
+            }
 
             return weightsRecord[bestSortinoIndex];
         }
