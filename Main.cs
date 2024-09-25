@@ -196,33 +196,33 @@ namespace QuantConnect.Algorithm.CSharp
                 kvp.Value.Update(Time, Securities[kvp.Key].Close);
             }
 
-            // if (this.monthly_starting_equity.IsLessThanOrEqual(NearZero))
-            // {
-            //     this.monthly_starting_equity = this.Portfolio.TotalPortfolioValue;
-            // }
+            if (this.monthly_starting_equity.IsLessThanOrEqual(NearZero))
+            {
+                this.monthly_starting_equity = this.Portfolio.TotalPortfolioValue;
+            }
 
-            // var current_portfolio_value = this.Portfolio.TotalPortfolioValue;
+            var current_portfolio_value = this.Portfolio.TotalPortfolioValue;
 
-            // var current_profit_pct_to_start = 0M;
-            // if (this.monthly_starting_equity.IsGreaterThan(NearZero))
-            // {
-            //     current_profit_pct_to_start = ((current_portfolio_value - this.monthly_starting_equity) / this.monthly_starting_equity) * 100;
-            // }
+            var current_profit_pct_to_start = 0M;
+            if (this.monthly_starting_equity.IsGreaterThan(NearZero))
+            {
+                current_profit_pct_to_start = ((current_portfolio_value - this.monthly_starting_equity) / this.monthly_starting_equity) * 100;
+            }
 
-            // this.highest_profit_pct = Math.Max(this.highest_profit_pct, current_profit_pct_to_start);
+            this.highest_profit_pct = Math.Max(this.highest_profit_pct, current_profit_pct_to_start);
 
-            // var drop_pct = 0M;
-            // if (this.highest_profit_pct.IsGreaterThan(NearZeroPct))
-            // {
-            //     drop_pct = ((this.highest_profit_pct - current_profit_pct_to_start) / this.highest_profit_pct) * 100;
-            // }
+            var drop_pct = 0M;
+            if (this.highest_profit_pct.IsGreaterThan(NearZeroPct))
+            {
+                drop_pct = ((this.highest_profit_pct - current_profit_pct_to_start) / this.highest_profit_pct) * 100;
+            }
 
             // if (current_profit_pct_to_start <= -12 && !this.global_stop_loss_triggered)
             // {
             //     var current_date = Time.ToString(DateFormat);
             //     Log($"{current_date}: Liquidating all holdings due to a portfolio loss of {current_profit_pct_to_start:.2f}% (stop-loss from last adjustment).");
             //     Liquidate();
-            //     this._rebalance = false;  // Allow immediate rebalancing
+            //     this._rebalance = false;  // Don't allow immediate rebalancing
             //     this.global_stop_loss_triggered = true;
             //     this.highest_profit_pct = 0;
             //     this.monthly_starting_equity = 0;
@@ -232,49 +232,49 @@ namespace QuantConnect.Algorithm.CSharp
             // }
 
 
-            // if (this.highest_profit_pct > 10 && drop_pct >= 10)
-            // {
-            //     var current_date = Time.ToString(DateFormat);
-            //     Log($"{current_date}: Liquidating all holdings due to a {drop_pct:.2f}% drop in profit (take-profit).");
-            //     Log($"{current_date}: Highest Net Profit: {this.highest_profit_pct:.2f}% (from last adjustment)");
-            //     Log($"{current_date}: Current Net Profit: {current_profit_pct_to_start:.2f}% (from last adjustment)");
-            //     var total_profit_pct = ((current_portfolio_value - InitialCash) / InitialCash) * 100;
-            //     Log($"{current_date}: Total Net Profit: {total_profit_pct:.2f}% (from inception)");
-            //     Liquidate();
-            //     this._rebalance = true;  // Allow immediate rebalancing
-            //     this.global_stop_loss_triggered = true;
-            //     this.highest_profit_pct = 0;
-            //     this.monthly_starting_equity = 0;
-            //     this.next_adjustment_date = GetNextAdjustmentDate(Time);
+            if (this.highest_profit_pct > 10 && drop_pct >= 10)
+            {
+                // var current_date = Time.ToString(DateFormat);
+                // Log($"{current_date}: Liquidating all holdings due to a {drop_pct:.2f}% drop in profit (take-profit).");
+                // Log($"{current_date}: Highest Net Profit: {this.highest_profit_pct:.2f}% (from last adjustment)");
+                // Log($"{current_date}: Current Net Profit: {current_profit_pct_to_start:.2f}% (from last adjustment)");
+                // var total_profit_pct = ((current_portfolio_value - InitialCash) / InitialCash) * 100;
+                // Log($"{current_date}: Total Net Profit: {total_profit_pct:.2f}% (from inception)");
+                Liquidate();
+                this._rebalance = true;  // Allow immediate rebalancing
+                this.global_stop_loss_triggered = true;
+                this.highest_profit_pct = 0;
+                this.monthly_starting_equity = 0;
+                this.next_adjustment_date = GetNextAdjustmentDate(Time);
 
-            //     if (!this.halved_lookback)
-            //     {
-            //         // this._lookback = PLookback / 2;  // Halve the lookback period
-            //         this._short_lookback = PShortLookback / 7;
-            //         this.halved_lookback = true;  // Set the halved lookback flag
-            //     }
-            //     return;
-            // }
+                if (!this.halved_lookback)
+                {
+                    // this._lookback = PLookback / 2;  // Halve the lookback period
+                    this._short_lookback = PShortLookback / 7;
+                    this.halved_lookback = true;  // Set the halved lookback flag
+                }
+                return;
+            }
 
 
-            // if (Time.Day == 1 && (Time.Month != this.last_logged_month))
-            // {
-            //     var current_date = Time.ToString(DateFormat);
-            //     var portfolio_value = Portfolio.TotalPortfolioValue;
-            //     var net_profit = portfolio_value - InitialCash;
-            //     var holdings_value = Portfolio.Values.Where(sec => sec.Invested).Sum(sec => sec.HoldingsValue);
-            //     var unrealized_profit = Portfolio.TotalUnrealizedProfit;
-            //     var return_pct = (net_profit / InitialCash) * 100;
-            //     Log($"{current_date}: Equity: ${portfolio_value:.2f} | Holdings: ${holdings_value:.2f} | Net Profit: ${net_profit:.2f} | Unrealized: ${unrealized_profit:.2f} | Return: {return_pct:.2f}%");
-            //     this.last_logged_month = Time.Month;
+            if (Time.Day == 1 && (Time.Month != this.last_logged_month))
+            {
+                var current_date = Time.ToString(DateFormat);
+                var portfolio_value = Portfolio.TotalPortfolioValue;
+                var net_profit = portfolio_value - InitialCash;
+                var holdings_value = Portfolio.Values.Where(sec => sec.Invested).Sum(sec => sec.HoldingsValue);
+                var unrealized_profit = Portfolio.TotalUnrealizedProfit;
+                var return_pct = (net_profit / InitialCash) * 100;
+                Log($"{current_date}: Equity: ${portfolio_value:.2f} | Holdings: ${holdings_value:.2f} | Net Profit: ${net_profit:.2f} | Unrealized: ${unrealized_profit:.2f} | Return: {return_pct:.2f}%");
+                this.last_logged_month = Time.Month;
 
-            //     if (this.halved_lookback)
-            //     {
-            //         this._lookback = PLookback;  // Restore the original lookback period
-            //         this._short_lookback = PShortLookback;  // Restore the original short lookback period
-            //         this.halved_lookback = false;  // Reset the halved lookback flag
-            //     }
-            // }
+                if (this.halved_lookback)
+                {
+                    this._lookback = PLookback;  // Restore the original lookback period
+                    this._short_lookback = PShortLookback;  // Restore the original short lookback period
+                    this.halved_lookback = false;  // Reset the halved lookback flag
+                }
+            }
 
             if (!this._rebalance)
             {
@@ -488,5 +488,4 @@ namespace QuantConnect.Algorithm.CSharp
         }
 
     }
-
 }
