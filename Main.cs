@@ -65,7 +65,7 @@ using MathNet.Numerics.Statistics;
 #endregion
 namespace QuantConnect.Algorithm.CSharp
 {
-    public class MonthlyRebalancingWithEarlyStopCSharp : QCAlgorithm
+    public class League2024Q4 : QCAlgorithm
     {
         // Public fields
         public const string DateFormat = "yyyy-MM-dd HH:mm:ss";
@@ -97,7 +97,7 @@ namespace QuantConnect.Algorithm.CSharp
         private DateTime? nextAdjustmentDate;
 
         // The QCAlgoritm only has a noargs constructor
-        public MonthlyRebalancingWithEarlyStopCSharp()
+        public League2024Q4()
         {
         }
         public override void Initialize()
