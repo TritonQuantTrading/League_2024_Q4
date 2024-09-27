@@ -81,6 +81,7 @@ namespace QuantConnect.Algorithm.CSharp
         public const int PShortLookback = 63;
         public const int PRandSeed = 10; // 18, 2, 4, 10, 11
         public const string PAdjustmentFrequency = "monthly"; // can be "daily", "weekly", "bi-weekly", "monthly"
+
         // Private fields
         private Dictionary<Symbol, MomentumPercent> _momp;
         private int _lookback;
@@ -94,26 +95,82 @@ namespace QuantConnect.Algorithm.CSharp
         private int _shortLookback;
         private DateTime? firstTradeDate;
         private DateTime? nextAdjustmentDate;
+
         // Metrics for no trades and profit tracking
         private decimal highestProfitPct;
         private decimal monthlyStartingEquity;
         private int? lastLoggedMonth;
         private bool globalStopLossTriggered;
         private bool halvedLookback;
-        // the QCAlgoritm only has a noargs constructor
+
+        // The QCAlgoritm only has a noargs constructor
         public MonthlyRebalancingWithEarlyStopCSharp()
         {
         }
         public override void Initialize()
         {
-            SetStartDate(2019, 3, 1);
+            // Set Dates (will be ignored in live mode)
+            // SetStartDate(2019, 3, 1);
+            SetStartDate(2024, 1, 1);
             SetEndDate(2024, 8, 1);
+
+            // Set Account Currency
+            // - Default is USD $100,000
+            // - Must be done before SetCash()
+            // SetAccountCurrency("USD");
+            // SetAccountCurrency("BTC", 10);
+            //
+            // Question: How to set multiple currencies? Like, the mix of USD and BTC
+            // Answer: No, you cannot set multiple account currency and you can only set it once. Its internal valule is used for all calculations.
+            // Reference: https://www.quantconnect.com/docs/v2/writing-algorithms/portfolio/cashbook#02-Account-Currency
+            
+            // Set Cash
+            // SetCash("BTC", 10);
             SetCash(InitialCash);
+
+            // Set Universe Settings
+            UniverseSettings.Resolution = Resolution.Daily;
+            // UniverseSettings.Asynchronous = true;
+            // UniverseSettings.ExtendedMarketHours = true; // only set to true if you are performing intraday trading
+            AddUniverse(CoarseSelectionFunction, FineSelectionFunction);
+            // TODO: Multi-universe? But the members are only for certain unvierse, but the active securities are for all universes
+            // UniverseManager[_universe.Configuration.Symbol].Members:
+            // Universe.Members: When you remove an asset from a universe, LEAN usually removes the security from the Members collection and removes the security subscription. 
+            // Question: question here, why `Members` exactly the same as `ActiveSecurities`?
+            // Answer: ActiveSecurities is a collection of all Members from all universes.
+            // TODO: what is the Symbol of a universe? Where is it defined?
+            // ActiveSecurities: When you remove an asset from a universe, LEAN usually removes the security from the ActiveSecurities collection and removes the security subscription.
+            // Note: both `UniverseManager` and `ActiveSecurities` are properties of the `QCAlgorithm` class
+            // To have access to all securities without considering the active or not, use `Securities` property
+            // - There are still cases where the Securities may remove the security, but only from the primary collection (Securities.Values), and can still be accessed from Securities.Total
+            //
+            // Universe.Selected: Different from Members, Members contains more assets 
+            // Diffs Remarks:
+            //   This set might be different than QuantConnect.Data.UniverseSelection.Universe.Securities
+            //   which might hold members that are no longer selected but have not been removed
+            //   yet, this can be because they have some open position, orders, haven't completed
+            //   the minimum time in universe
+
+
+            // Set Security Initializer
+            // - This allow any custom security-level settings, instead of using the global universe settings
+            // - SetSecurityInitializer(security => security.SetFeeModel(new ConstantFeeModel(0, "USD")));
+            // - SetSecurityInitializer(new MySecurityInitializer(BrokerageModel, new FuncSecuritySeeder(GetLastKnownPrices)));
             SetSecurityInitializer(new BrokerageModelSecurityInitializer(
                 this.BrokerageModel, new FuncSecuritySeeder(this.GetLastKnownPrices)
             ));
-            UniverseSettings.Resolution = Resolution.Daily;
-            // should be init here instead of constructor
+
+            // Set Warmup Period
+            // SetWarmUp(PLookback/2, Resolution.Daily);
+
+            // OnWarmupFinished() is the last method called before the algorithm starts running
+            // - You can notify yourself by overriding this method: public override void OnWarmupFinished() { Log("Algorithm Ready"); }
+            // - You can train machine learning models here: public override void OnWarmupFinished() { Train(MyTrainingMethod); }
+            // The OnWarmupFinished() will be called after the warmup period even if the warmup period is not set
+
+            // PostInitialize() method should never be overridden because it is used for predefined post-initialization routines
+
+            // Customized Initialization
             this._momp = new Dictionary<Symbol, MomentumPercent>();
             this._lookback = PLookback;
             this._numCoarse = PNumCoarse;
@@ -131,7 +188,6 @@ namespace QuantConnect.Algorithm.CSharp
             this.lastLoggedMonth = 0;
             this.globalStopLossTriggered = false;
             this.halvedLookback = false;
-            AddUniverse(CoarseSelectionFunction, FineSelectionFunction);
         }
         public IEnumerable<Symbol> CoarseSelectionFunction(IEnumerable<CoarseFundamental> coarse)
         {
@@ -147,13 +203,28 @@ namespace QuantConnect.Algorithm.CSharp
                 this._rebalance = true;
             }
             var selected = coarse.Where(x => x.HasFundamentalData && x.Price > 5)
-                .OrderByDescending(x => x.DollarVolume)                .Take(this._numCoarse);
+                .OrderByDescending(x => x.DollarVolume).Take(this._numCoarse);
             return selected.Select(x => x.Symbol);
         }
         public IEnumerable<Symbol> FineSelectionFunction(IEnumerable<FineFundamental> fine)
         {
             var selected = fine.OrderByDescending(f => f.MarketCap).Take(this._numFine);
             return selected.Select(x => x.Symbol);
+        }
+
+        public override void OnWarmupFinished()
+        {
+            Log("Algorithm Ready");
+            // show universities
+            foreach (var universe in UniverseManager.Values)
+            {
+                Log($"Universe: {universe.Configuration.Symbol}");
+                // show all members
+                foreach (var member in universe.Members)
+                {
+                    Log($"  Member: {member}");
+                }
+            }
         }
         public static DateTime GetNextAdjustmentDate(DateTime currentDate, bool initial = false)
         {
@@ -337,6 +408,18 @@ namespace QuantConnect.Algorithm.CSharp
                     this._momp[symbol].Update(item);
                 }
             }
+
+            // log the current universes and members
+            var currentDate = Time.ToString(DateFormat);
+            foreach (var universe in UniverseManager.Values)
+            {
+                Log($"{currentDate}: Universe: {universe.Configuration.Symbol}");
+                foreach (var member in universe.Members)
+                {
+                    Log($"{currentDate}:   Member: {member.Key} => {member.Value}");
+                }
+            }
+
         }
 
         public void AdjustPortfolio()
