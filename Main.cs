@@ -79,7 +79,7 @@ namespace QuantConnect.Algorithm.CSharp
         public const decimal PAdjustmentStep = 1.0M;
         public const int PNPortfolios = 1000;
         public const int PShortLookback = 63;
-        public const int PRandSeed = 10; // 18, 2, 4, 10, 11
+        public const int PRandSeed = 11; // 18, 2, 4, 10, 11
         public const string PAdjustmentFrequency = "monthly"; // can be "daily", "weekly", "bi-weekly", "monthly"
 
         // Private fields
@@ -96,13 +96,6 @@ namespace QuantConnect.Algorithm.CSharp
         private DateTime? firstTradeDate;
         private DateTime? nextAdjustmentDate;
 
-        // Metrics for no trades and profit tracking
-        private decimal highestProfitPct;
-        private decimal monthlyStartingEquity;
-        private int? lastLoggedMonth;
-        private bool globalStopLossTriggered;
-        private bool halvedLookback;
-
         // The QCAlgoritm only has a noargs constructor
         public MonthlyRebalancingWithEarlyStopCSharp()
         {
@@ -110,8 +103,8 @@ namespace QuantConnect.Algorithm.CSharp
         public override void Initialize()
         {
             // Set Dates (will be ignored in live mode)
-            // SetStartDate(2019, 3, 1);
-            SetStartDate(2024, 1, 1);
+            SetStartDate(2014, 3, 1);
+            // SetStartDate(2024, 1, 1);
             SetEndDate(2024, 8, 1);
 
             // Set Account Currency
@@ -123,7 +116,7 @@ namespace QuantConnect.Algorithm.CSharp
             // Question: How to set multiple currencies? Like, the mix of USD and BTC
             // Answer: No, you cannot set multiple account currency and you can only set it once. Its internal valule is used for all calculations.
             // Reference: https://www.quantconnect.com/docs/v2/writing-algorithms/portfolio/cashbook#02-Account-Currency
-            
+
             // Set Cash
             // SetCash("BTC", 10);
             SetCash(InitialCash);
@@ -183,11 +176,6 @@ namespace QuantConnect.Algorithm.CSharp
             this._shortLookback = PShortLookback;
             this.firstTradeDate = null;
             this.nextAdjustmentDate = null;
-            this.highestProfitPct = 0;
-            this.monthlyStartingEquity = 0;
-            this.lastLoggedMonth = 0;
-            this.globalStopLossTriggered = false;
-            this.halvedLookback = false;
         }
         public IEnumerable<Symbol> CoarseSelectionFunction(IEnumerable<CoarseFundamental> coarse)
         {
@@ -226,7 +214,7 @@ namespace QuantConnect.Algorithm.CSharp
                 }
             }
         }
-        public static DateTime GetNextAdjustmentDate(DateTime currentDate, bool initial = false)
+        public static DateTime GetNextAdjustmentDate(DateTime currentDate)
         {
             if (PAdjustmentFrequency.Equals("weekly"))
             {
@@ -238,17 +226,8 @@ namespace QuantConnect.Algorithm.CSharp
             }
             else if (PAdjustmentFrequency.Equals("monthly"))
             {
-                // TODO: It looks like the initial date is not being used
-                if (initial)
-                {
-                    var nextMonth = currentDate.AddDays(32);
-                    return nextMonth.AddDays(-nextMonth.Day + 1);
-                }
-                else
-                {
-                    var nextMonth = currentDate.AddDays(32);
-                    return nextMonth.AddDays(-nextMonth.Day + 1);
-                }
+                var nextMonth = currentDate.AddDays(32);
+                return nextMonth.AddDays(-nextMonth.Day + 1);
             }
             else
             {
@@ -262,101 +241,15 @@ namespace QuantConnect.Algorithm.CSharp
                 kvp.Value.Update(Time, Securities[kvp.Key].Close);
             }
 
-            if (this.monthlyStartingEquity.IsLessThanOrEqual(NearZero))
-            {
-                this.monthlyStartingEquity = this.Portfolio.TotalPortfolioValue;
-            }
-
-            var currentPortfolioValue = this.Portfolio.TotalPortfolioValue;
-
-            var currentProfitPctToStart = 0M;
-            if (this.monthlyStartingEquity.IsGreaterThan(NearZero))
-            {
-                currentProfitPctToStart = ((currentPortfolioValue - this.monthlyStartingEquity) / this.monthlyStartingEquity) * 100;
-            }
-
-            this.highestProfitPct = Math.Max(this.highestProfitPct, currentProfitPctToStart);
-
-            var dropPct = 0M;
-            if (this.highestProfitPct.IsGreaterThan(NearZeroPct))
-            {
-                dropPct = ((this.highestProfitPct - currentProfitPctToStart) / this.highestProfitPct) * 100;
-            }
-
-            if (currentProfitPctToStart <= -12 && !this.globalStopLossTriggered)
-            {
-                var currentDate = Time.ToString(DateFormat);
-                Log($"{currentDate}: Liquidating all holdings due to a portfolio loss of {currentProfitPctToStart:F2}% (stop-loss from last adjustment).");
-                // Liquidate(); // It looks like we should not liquidate here
-                this._rebalance = false;  // Don't allow immediate rebalancing
-                this.globalStopLossTriggered = true;
-                this.highestProfitPct = 0;
-                this.monthlyStartingEquity = 0;
-                this.nextAdjustmentDate = GetNextAdjustmentDate(Time);
-                Log($"{currentDate}: Stopping trading temporarily due to stop-loss trigger.");
-                return;
-            }
-
-
-            if (this.highestProfitPct > 10 && dropPct >= 10)
-            {
-                var currentDate = Time.ToString(DateFormat);
-                Log($"{currentDate}: Liquidating all holdings due to a {dropPct:F2}% drop in profit (take-profit).");
-                Log($"{currentDate}: Highest Net Profit: {this.highestProfitPct:F2}% (from last adjustment)");
-                Log($"{currentDate}: Current Net Profit: {currentProfitPctToStart:F2}% (from last adjustment)");
-                var totalProfitPct = ((currentPortfolioValue - InitialCash) / InitialCash) * 100;
-                Log($"{currentDate}: Total Net Profit: {totalProfitPct:F2}% (from inception)");
-                Liquidate();
-                this._rebalance = true;  // Allow immediate rebalancing
-                this.globalStopLossTriggered = true;
-                this.highestProfitPct = 0;
-                this.monthlyStartingEquity = 0;
-                this.nextAdjustmentDate = GetNextAdjustmentDate(Time);
-
-                if (!this.halvedLookback)
-                {
-                    // this._lookback = PLookback / 2;  // Halve the lookback period
-                    this._shortLookback = PShortLookback / 7;
-                    this.halvedLookback = true;  // Set the halved lookback flag
-                }
-                return;
-            }
-
-
-            if (Time.Day == 1 && (Time.Month != this.lastLoggedMonth))
-            {
-                var currentDate = Time.ToString(DateFormat);
-                var portfolioValue = Portfolio.TotalPortfolioValue;
-                var netProfit = portfolioValue - InitialCash;
-                var holdingsValue = Portfolio.Values.Where(sec => sec.Invested).Sum(sec => sec.HoldingsValue);
-                var unrealizedProfit = Portfolio.TotalUnrealizedProfit;
-                var returnPct = (netProfit / InitialCash) * 100;
-                Log($"{currentDate}: Equity: ${portfolioValue:F2} | Holdings: ${holdingsValue:F2} | Net Profit: ${netProfit:F2} | Unrealized: ${unrealizedProfit:F2} | Return: {returnPct:F2}%");
-                this.lastLoggedMonth = Time.Month;
-
-                if (this.halvedLookback)
-                {
-                    this._lookback = PLookback;
-                    this._shortLookback = PShortLookback;
-                    this.halvedLookback = false;
-                }
-            }
-
             if (!this._rebalance)
             {
                 return;
             }
 
-            if (this._rebalance)
-            {
-                this.globalStopLossTriggered = false;
-                this._rebalance = false;
-            }
-
             var sortedMom = (from kvp in this._momp
-                              where kvp.Value.IsReady
-                              orderby kvp.Value.Current.Value descending
-                              select kvp.Key).ToList();
+                             where kvp.Value.IsReady
+                             orderby kvp.Value.Current.Value descending
+                             select kvp.Key).ToList();
             var selected = sortedMom.Take(this._numLong).ToList();
             var newHoldings = new HashSet<Symbol>(selected);
 
@@ -394,8 +287,8 @@ namespace QuantConnect.Algorithm.CSharp
             }
 
             var addedSymbols = (from kvp in this._momp
-                                 where !kvp.Value.IsReady
-                                 select kvp.Key).ToList();
+                                where !kvp.Value.IsReady
+                                select kvp.Key).ToList();
             var history = History(addedSymbols, 1 + this._lookback, Resolution.Daily); // iterable of slices
             foreach (var symbol in addedSymbols)
             {
@@ -419,7 +312,6 @@ namespace QuantConnect.Algorithm.CSharp
                     Log($"{currentDate}:   Member: {member.Key} => {member.Value}");
                 }
             }
-
         }
 
         public void AdjustPortfolio()
