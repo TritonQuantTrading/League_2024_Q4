@@ -72,7 +72,7 @@ namespace QuantConnect
         private int _numLong;
         private decimal _adjustmentStep;
         private int _shortLookback;
-        private League2024Q4 _algo;
+        private readonly League2024Q4 _algo;
         public MomentumUniverseSelectionModel(League2024Q4 algo, int lookback, int numCoarse, int numFine, int numLong, decimal adjustmentStep, int shortLookback)
         {
             this._algo = algo;

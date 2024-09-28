@@ -69,14 +69,14 @@ namespace QuantConnect.Algorithm.CSharp
     {
         // Public fields
         public const string DateFormat = "yyyy-MM-dd HH:mm:ss";
-        public const decimal NearZero = 1e-6M;
-        public const decimal NearZeroPct = 1e-4M;
+        public const decimal NearZero = 1e-6m;
+        public const decimal NearZeroPct = 1e-4m;
         public const decimal InitialCash = 1_000_000;
         public const int PLookback = 252;
         public const int PNumCoarse = 200;
         public const int PNumFine = 70;
         public const int PNumLong = 5;
-        public const decimal PAdjustmentStep = 1.0M;
+        public const decimal PAdjustmentStep = 1.0m;
         public const int PNPortfolios = 1000;
         public const int PShortLookback = 63;
         public const int PRandSeed = 11; // 18, 2, 4, 10, 11
@@ -103,8 +103,8 @@ namespace QuantConnect.Algorithm.CSharp
         public override void Initialize()
         {
             // Set Dates (will be ignored in live mode)
-            // SetStartDate(2014, 3, 1);
-            SetStartDate(2019, 3, 1);
+            SetStartDate(2014, 3, 1);
+            // SetStartDate(2019, 3, 1);
             // SetStartDate(2024, 1, 1);
             SetEndDate(2024, 8, 1);
 
@@ -210,12 +210,7 @@ namespace QuantConnect.Algorithm.CSharp
             // show universities
             foreach (var universe in UniverseManager.Values)
             {
-                Log($"Universe: {universe.Configuration.Symbol}: {universe.Members.Count} members");
-                // show all members
-                // foreach (var member in universe.Members)
-                // {
-                //     Log($"  Member: {member}");
-                // }
+                Log($"Init Universe: {universe.Configuration.Symbol}: {universe.Members.Count} members");
             }
         }
         public static DateTime GetNextAdjustmentDate(DateTime currentDate)
@@ -306,16 +301,15 @@ namespace QuantConnect.Algorithm.CSharp
                 }
             }
 
-            // log the current universes and members
+            // Log the changes
             var currentDate = Time.ToString(DateFormat);
             foreach (var universe in UniverseManager.Values)
             {
-                Log($"{currentDate}: Universe: {universe.Configuration.Symbol} => {universe.Members.Count} members");
-                // foreach (var member in universe.Members)
-                // {
-                //     Log($"{currentDate}:   Member: {member.Key} => {member.Value}");
-                // }
+                Log($"{currentDate}: Updated Universe: {universe.Configuration.Symbol}: {universe.Members.Count} members");
             }
+            var addedStr = string.Join(", ", changes.AddedSecurities.Select(security => security.Symbol.Value));
+            var removedStr = string.Join(", ", changes.RemovedSecurities.Select(security => security.Symbol.Value));
+            Log($"{currentDate}: Security Changes: (+{changes.AddedSecurities.Count})[{addedStr}], (-{changes.RemovedSecurities.Count})[{removedStr}]");
         }
 
         public void AdjustPortfolio()
@@ -343,7 +337,7 @@ namespace QuantConnect.Algorithm.CSharp
             }
 
             var holdings = new Dictionary<string, decimal>();
-            var sumOfAllHoldings = 0M;
+            var sumOfAllHoldings = 0m;
             foreach (var symbol in Portfolio.Keys)
             {
                 var holdingPercentage = Portfolio[symbol].HoldingsValue / Portfolio.TotalPortfolioValue * 100;
@@ -354,7 +348,8 @@ namespace QuantConnect.Algorithm.CSharp
                 }
             }
             var currentDate = Time.ToString(DateFormat);
-            Log($"{currentDate}: Final holdings [{sumOfAllHoldings:F2}%]: {holdings}");
+            var holdingsStr = string.Join(", ", holdings.Select(kvp => $"{kvp.Key}: {kvp.Value:F2}%"));
+            Log($"{currentDate}: Holdings[{sumOfAllHoldings:F2}%]: [{holdingsStr}]");
         }
 
         public List<decimal> OptimizePortfolio(List<Symbol> selectedSymbols)
@@ -479,7 +474,7 @@ namespace QuantConnect.Algorithm.CSharp
             if (bestSortinoIndex < 0 || bestSortinoIndex >= weightsRecord.Count)
             {
                 Log("[OptimizePortfolio] Unable to determine the best Sortino index. Returning equal weights.");
-                var equalWeights = Enumerable.Repeat(1.0M / nAssets, nAssets).ToList();
+                var equalWeights = Enumerable.Repeat(1.0m / nAssets, nAssets).ToList();
                 return equalWeights;
             }
 
