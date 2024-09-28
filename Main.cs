@@ -58,6 +58,9 @@ using QCAlgorithmFramework = QuantConnect.Algorithm.QCAlgorithm;
 using QCAlgorithmFrameworkBridge = QuantConnect.Algorithm.QCAlgorithm;
 using System.Security.Cryptography.X509Certificates;
 using QLNet;
+using Accord.Math;
+using Accord.Math.Optimization;
+using Accord.Statistics;
 using Accord;
 using Fasterflect;
 using MathNet.Numerics.LinearAlgebra;
@@ -103,7 +106,7 @@ namespace QuantConnect.Algorithm.CSharp
         public override void Initialize()
         {
             // Set Dates (will be ignored in live mode)
-            SetStartDate(2014, 3, 1);
+            SetStartDate(2019, 3, 1);
             // SetStartDate(2019, 3, 1);
             // SetStartDate(2024, 1, 1);
             SetEndDate(2024, 8, 1);
@@ -180,6 +183,8 @@ namespace QuantConnect.Algorithm.CSharp
             this.firstTradeDate = null;
             this.nextAdjustmentDate = null;
             SetUniverseSelection(new MomentumUniverseSelectionModel(this, this._lookback, this._numCoarse, this._numFine, this._numLong, this.adjustmentStep, this._shortLookback));
+            // SetPortfolioConstruction(new MinimumVariancePortfolioConstructionModel());
+            // SetExecution(new ImmediateExecutionModel());
         }
         public IEnumerable<Symbol> CoarseSelectionFunction(IEnumerable<CoarseFundamental> coarse)
         {
@@ -354,6 +359,43 @@ namespace QuantConnect.Algorithm.CSharp
 
         public List<decimal> OptimizePortfolio(List<Symbol> selectedSymbols)
         {
+            // historical returns matrix and symbols
+            var (historicalReturns, validSymbols) = GetHistoricalReturnsMatrix(selectedSymbols);
+
+            int nAssets = validSymbols.Count;
+            if (nAssets == 0 || historicalReturns.GetLength(0) == 0)
+            {
+                Log("[OptimizePortfolio] No valid symbols with sufficient historical data. Returning empty weights.");
+                return new List<decimal>();
+            }
+
+            // Portfolio Optimizers
+            // monte carlo optimizer
+            var mcOptimizer = new MonteCarloPortfolioOptimizer(PNPortfolios, this._shortLookback, PRandSeed);
+            var optimizedWeights = mcOptimizer.Optimize(historicalReturns);
+
+            // quadratic programming optimizer
+            // var qpOptimizer = new QuadraticProgrammingPortfolioOptimizer(this._shortLookback);
+            // var optimizedWeights = qpOptimizer.Optimize(historicalReturns);
+
+            // soc optimizer
+            // var socOptimizer = new SOCPortfolioOptimizer();
+            // var optimizedWeights = socOptimizer.Optimize(historicalReturns);
+
+            // logging
+            var symbolWeights = new Dictionary<Symbol, decimal>();
+            for (int i = 0; i < nAssets; i++)
+            {
+                symbolWeights[validSymbols[i]] = (decimal)optimizedWeights[i];
+            }
+            var weightsStr = string.Join(", ", symbolWeights.Select(kvp => $"{kvp.Key.Value}: {kvp.Value:F4}"));
+            Log($"[OptimizePortfolio] Optimized Weights: {weightsStr}");
+
+            return optimizedWeights.Select(w => (decimal)w).ToList();
+        }
+
+        private (double[,] historicalReturns, List<Symbol> validSymbols) GetHistoricalReturnsMatrix(List<Symbol> selectedSymbols)
+        {
             var shortLookback = this._shortLookback;
 
             var historySlices = History(selectedSymbols, shortLookback, Resolution.Daily);
@@ -366,19 +408,21 @@ namespace QuantConnect.Algorithm.CSharp
                     group => group.Select(g => (double)g.Value.Close).ToList()
                 );
 
-            var returnsDict = new Dictionary<Symbol, List<double>>();
+            var validSymbols = new List<Symbol>();
+            var returnsList = new List<List<double>>();
+
             foreach (var symbol in selectedSymbols)
             {
                 if (!history.ContainsKey(symbol))
                 {
-                    Log($"[OptimizePortfolio] Missing historical data for {symbol.Value}. Skipping this symbol.");
+                    Log($"[GetHistoricalReturnsMatrix] Missing historical data for {symbol.Value}. Skipping this symbol.");
                     continue;
                 }
 
                 var closePrices = history[symbol];
                 if (closePrices.Count < shortLookback)
                 {
-                    Log($"[OptimizePortfolio] Insufficient historical data for {symbol.Value}. Required: {shortLookback}, Available: {closePrices.Count}. Skipping this symbol.");
+                    Log($"[GetHistoricalReturnsMatrix] Insufficient historical data for {symbol.Value}. Required: {shortLookback}, Available: {closePrices.Count}. Skipping this symbol.");
                     continue;
                 }
 
@@ -387,99 +431,31 @@ namespace QuantConnect.Algorithm.CSharp
                     .Skip(1) // Skip the first return as it's zero
                     .ToList();
 
-                returnsDict[symbol] = returns;
+                validSymbols.Add(symbol);
+                returnsList.Add(returns);
             }
 
-            var validSymbols = returnsDict.Keys.ToList();
             int nAssets = validSymbols.Count;
 
             if (nAssets == 0)
             {
-                Log("[OptimizePortfolio] No valid symbols with sufficient historical data. Returning empty weights.");
-                return new List<decimal>();
+                Log("[GetHistoricalReturnsMatrix] No valid symbols with sufficient historical data. Returning empty matrix.");
+                return (new double[0, 0], validSymbols);
             }
 
-            int nPortfolios = PNPortfolios;
+            int nObservations = returnsList[0].Count; // Assuming all assets have the same number of observations
+            var historicalReturns = new double[nObservations, nAssets];
 
-            var portfolioReturns = new double[nPortfolios];
-            var portfolioStdDevs = new double[nPortfolios];
-            var sortinoRatios = new double[nPortfolios];
-            var weightsRecord = new List<List<decimal>>(nPortfolios);
-
-            var returnsMatrix = Matrix<double>.Build.Dense(nAssets, shortLookback - 1);
             for (int i = 0; i < nAssets; i++)
             {
-                for (int j = 0; j < shortLookback - 1; j++)
+                var returns = returnsList[i];
+                for (int j = 0; j < nObservations; j++)
                 {
-                    returnsMatrix[i, j] = returnsDict[validSymbols[i]][j];
+                    historicalReturns[j, i] = returns[j];
                 }
             }
 
-            var covarianceMatrix = returnsMatrix * returnsMatrix.Transpose() / (shortLookback - 2);
-
-            var random = new Random(PRandSeed);
-
-            for (int i = 0; i < nPortfolios; i++)
-            {
-                var weights = new List<decimal>(nAssets);
-                double sumWeights = 0.0;
-                for (int j = 0; j < nAssets; j++)
-                {
-                    double w = random.NextDouble();
-                    weights.Add((decimal)w);
-                    sumWeights += w;
-                }
-
-                for (int j = 0; j < nAssets; j++)
-                {
-                    weights[j] = weights[j] / (decimal)sumWeights;
-                }
-
-                var weightsVector = Vector<double>.Build.Dense(nAssets, idx => (double)weights[idx]);
-
-                double portfolioReturn = 0.0;
-                for (int j = 0; j < nAssets; j++)
-                {
-                    portfolioReturn += returnsDict[validSymbols[j]].Average() * weightsVector[j];
-                }
-                portfolioReturn *= shortLookback;
-
-                double portfolioVariance = weightsVector * covarianceMatrix * weightsVector;
-                double portfolioStdDev = Math.Sqrt(portfolioVariance);
-
-                double downsideSum = 0.0;
-                for (int j = 0; j < nAssets; j++)
-                {
-                    var symbolReturns = returnsDict[validSymbols[j]];
-                    foreach (var r in symbolReturns)
-                    {
-                        if (r < 0)
-                        {
-                            downsideSum += Math.Pow(r, 2) * (double)weights[j];
-                        }
-                    }
-                }
-                double downsideStdDev = Math.Sqrt(downsideSum / (shortLookback - 1));
-
-                double sortinoRatio = downsideStdDev > 0 ? portfolioReturn / downsideStdDev : 0;
-
-                portfolioReturns[i] = portfolioReturn;
-                portfolioStdDevs[i] = portfolioStdDev;
-                sortinoRatios[i] = sortinoRatio;
-                weightsRecord.Add(new List<decimal>(weights));
-            }
-
-            int bestSortinoIndex = Array.IndexOf(sortinoRatios, sortinoRatios.Max());
-
-            if (bestSortinoIndex < 0 || bestSortinoIndex >= weightsRecord.Count)
-            {
-                Log("[OptimizePortfolio] Unable to determine the best Sortino index. Returning equal weights.");
-                var equalWeights = Enumerable.Repeat(1.0m / nAssets, nAssets).ToList();
-                return equalWeights;
-            }
-
-            return weightsRecord[bestSortinoIndex];
+            return (historicalReturns, validSymbols);
         }
-
     }
 }

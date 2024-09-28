@@ -105,6 +105,40 @@
                 "column": 9,
                 "sort": 109
             }
+        ],
+        "xs": [
+            {
+                "chartName": "Strategy Equity",
+                "width": 12,
+                "height": 6,
+                "row": 1,
+                "column": 1,
+                "sort": 11
+            },
+            {
+                "chartName": "Portfolio Margin",
+                "width": 12,
+                "height": 6,
+                "row": 7,
+                "column": 1,
+                "sort": 71
+            },
+            {
+                "chartName": "Assets Sales Volume",
+                "width": 12,
+                "height": 5,
+                "row": 13,
+                "column": 1,
+                "sort": 131
+            },
+            {
+                "chartName": "Drawdown",
+                "width": 12,
+                "height": 4,
+                "row": 18,
+                "column": 1,
+                "sort": 181
+            }
         ]
     }
 }
