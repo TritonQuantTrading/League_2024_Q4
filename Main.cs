@@ -186,28 +186,28 @@ namespace QuantConnect.Algorithm.CSharp
             // SetPortfolioConstruction(new MinimumVariancePortfolioConstructionModel());
             // SetExecution(new ImmediateExecutionModel());
         }
-        public IEnumerable<Symbol> CoarseSelectionFunction(IEnumerable<CoarseFundamental> coarse)
-        {
-            if (this.nextAdjustmentDate != null && Time < this.nextAdjustmentDate)
-            {
-                return Universe.Unchanged;
-            }
-            this._rebalance = true;
-            if (this.firstTradeDate == null)
-            {
-                this.firstTradeDate = Time;
-                this.nextAdjustmentDate = GetNextAdjustmentDate(Time);
-                this._rebalance = true;
-            }
-            var selected = coarse.Where(x => x.HasFundamentalData && x.Price > 5)
-                .OrderByDescending(x => x.DollarVolume).Take(this._numCoarse);
-            return selected.Select(x => x.Symbol);
-        }
-        public IEnumerable<Symbol> FineSelectionFunction(IEnumerable<FineFundamental> fine)
-        {
-            var selected = fine.OrderByDescending(f => f.MarketCap).Take(this._numFine);
-            return selected.Select(x => x.Symbol);
-        }
+        // public IEnumerable<Symbol> CoarseSelectionFunction(IEnumerable<CoarseFundamental> coarse)
+        // {
+        //     if (this.nextAdjustmentDate != null && Time < this.nextAdjustmentDate)
+        //     {
+        //         return Universe.Unchanged;
+        //     }
+        //     this._rebalance = true;
+        //     if (this.firstTradeDate == null)
+        //     {
+        //         this.firstTradeDate = Time;
+        //         this.nextAdjustmentDate = GetNextAdjustmentDate(Time);
+        //         this._rebalance = true;
+        //     }
+        //     var selected = coarse.Where(x => x.HasFundamentalData && x.Price > 5)
+        //         .OrderByDescending(x => x.DollarVolume).Take(this._numCoarse);
+        //     return selected.Select(x => x.Symbol);
+        // }
+        // public IEnumerable<Symbol> FineSelectionFunction(IEnumerable<FineFundamental> fine)
+        // {
+        //     var selected = fine.OrderByDescending(f => f.MarketCap).Take(this._numFine);
+        //     return selected.Select(x => x.Symbol);
+        // }
 
         public override void OnWarmupFinished()
         {
@@ -353,7 +353,9 @@ namespace QuantConnect.Algorithm.CSharp
                 }
             }
             var currentDate = Time.ToString(DateFormat);
-            var holdingsStr = string.Join(", ", holdings.Select(kvp => $"{kvp.Key}: {kvp.Value:F2}%"));
+            var targetedWeightsStr = string.Join(", ", this.targetWeights.OrderByDescending(kvp => kvp.Value).Select(kvp => $"{kvp.Key.Value}: {kvp.Value * 100:F2}%"));
+            Log($"{currentDate}: Targeted Holdings: [{targetedWeightsStr}]");
+            var holdingsStr = string.Join(", ", holdings.OrderByDescending(kvp => kvp.Value).Select(kvp => $"{kvp.Key}: {kvp.Value:F2}%"));
             Log($"{currentDate}: Holdings[{sumOfAllHoldings:F2}%]: [{holdingsStr}]");
         }
 
@@ -385,7 +387,7 @@ namespace QuantConnect.Algorithm.CSharp
             {
                 symbolWeights[validSymbols[i]] = (decimal)optimizedWeights[i];
             }
-            var weightsStr = string.Join(", ", symbolWeights.Select(kvp => $"{kvp.Key.Value}: {kvp.Value:F4}"));
+            var weightsStr = string.Join(", ", symbolWeights.OrderByDescending(kvp => kvp.Value).Select(kvp => $"{kvp.Key.Value}: {kvp.Value * 100:F2}%"));
             Log($"[OptimizePortfolio] Optimized Weights: {weightsStr}");
 
             return optimizedWeights.Select(w => (decimal)w).ToList();

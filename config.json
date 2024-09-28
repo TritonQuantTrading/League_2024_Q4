@@ -139,6 +139,64 @@
                 "column": 1,
                 "sort": 181
             }
+        ],
+        "xl": [
+            {
+                "chartName": "Strategy Equity",
+                "width": 9,
+                "height": 4,
+                "row": 1,
+                "column": 1,
+                "sort": 11
+            },
+            {
+                "chartName": "Assets Sales Volume",
+                "width": 3,
+                "height": 5,
+                "row": 1,
+                "column": 10,
+                "sort": 20
+            },
+            {
+                "chartName": "Portfolio Margin",
+                "width": 9,
+                "height": 3,
+                "row": 5,
+                "column": 1,
+                "sort": 51
+            },
+            {
+                "chartName": "Portfolio Turnover",
+                "width": 3,
+                "height": 2,
+                "row": 6,
+                "column": 10,
+                "sort": 70
+            },
+            {
+                "chartName": "Drawdown",
+                "width": 4,
+                "height": 2,
+                "row": 8,
+                "column": 1,
+                "sort": 81
+            },
+            {
+                "chartName": "Capacity",
+                "width": 4,
+                "height": 2,
+                "row": 8,
+                "column": 5,
+                "sort": 85
+            },
+            {
+                "chartName": "Exposure",
+                "width": 4,
+                "height": 2,
+                "row": 8,
+                "column": 9,
+                "sort": 89
+            }
         ]
     }
 }
