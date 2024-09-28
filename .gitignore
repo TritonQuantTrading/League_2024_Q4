@@ -292,3 +292,4 @@ __pycache__/
 
 qc.code-workspace
 *.sln
+.DS_Store
