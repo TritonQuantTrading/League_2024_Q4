@@ -104,7 +104,7 @@ namespace QuantConnect
             var selected = fundamental;
             // coarse selection
             selected = selected
-                .Where(f => f.Price > 5)
+                .Where(f => f.HasFundamentalData && f.Price > 5)
                 .OrderByDescending(f => f.DollarVolume)
                 .Take(this._numCoarse);
             // fine selection

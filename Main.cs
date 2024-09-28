@@ -103,8 +103,8 @@ namespace QuantConnect.Algorithm.CSharp
         public override void Initialize()
         {
             // Set Dates (will be ignored in live mode)
-            SetStartDate(2014, 3, 1);
-            // SetStartDate(2019, 3, 1);
+            // SetStartDate(2014, 3, 1);
+            SetStartDate(2019, 3, 1);
             // SetStartDate(2024, 1, 1);
             SetEndDate(2024, 8, 1);
 
@@ -124,7 +124,7 @@ namespace QuantConnect.Algorithm.CSharp
 
             // Set Universe Settings
             UniverseSettings.Resolution = Resolution.Daily;
-            UniverseSettings.Asynchronous = true;
+            // UniverseSettings.Asynchronous = true; // TODO: This would cause backtest consistency issues
             // UniverseSettings.ExtendedMarketHours = true; // only set to true if you are performing intraday trading
             // AddUniverseSelection(new FundamentalUniverseSelectionModel(Select, UniverseSettings));
             // AddUniverse(CoarseSelectionFunction);

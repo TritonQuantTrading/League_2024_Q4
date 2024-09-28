@@ -6,7 +6,56 @@
     "algorithm-language": "CSharp",
     "parameters": {},
     "backtestGrid": {
-        "md": [],
+        "md": [
+            {
+                "chartName": "Strategy Equity",
+                "width": 9,
+                "height": 6,
+                "row": 1,
+                "column": 1,
+                "sort": 11
+            },
+            {
+                "chartName": "Assets Sales Volume",
+                "width": 3,
+                "height": 10,
+                "row": 1,
+                "column": 10,
+                "sort": 20
+            },
+            {
+                "chartName": "Portfolio Margin",
+                "width": 9,
+                "height": 4,
+                "row": 7,
+                "column": 1,
+                "sort": 71
+            },
+            {
+                "chartName": "Drawdown",
+                "width": 4,
+                "height": 4,
+                "row": 11,
+                "column": 1,
+                "sort": 111
+            },
+            {
+                "chartName": "Exposure",
+                "width": 4,
+                "height": 4,
+                "row": 11,
+                "column": 5,
+                "sort": 115
+            },
+            {
+                "chartName": "Portfolio Turnover",
+                "width": 4,
+                "height": 4,
+                "row": 11,
+                "column": 9,
+                "sort": 119
+            }
+        ],
         "lg": [
             {
                 "chartName": "Strategy Equity",
