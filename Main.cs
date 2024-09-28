@@ -369,18 +369,15 @@ namespace QuantConnect.Algorithm.CSharp
                 return new List<decimal>();
             }
 
-            // Portfolio Optimizers
-            // monte carlo optimizer
-            var mcOptimizer = new MonteCarloPortfolioOptimizer(PNPortfolios, this._shortLookback, PRandSeed);
-            var optimizedWeights = mcOptimizer.Optimize(historicalReturns);
-
-            // quadratic programming optimizer
-            // var qpOptimizer = new QuadraticProgrammingPortfolioOptimizer(this._shortLookback);
-            // var optimizedWeights = qpOptimizer.Optimize(historicalReturns);
-
-            // soc optimizer
-            // var socOptimizer = new SOCPortfolioOptimizer();
-            // var optimizedWeights = socOptimizer.Optimize(historicalReturns);
+            // Portfolio Optimizers: [5 years] awesome (>= 300), good (>= 200), medium (>= 100), ordinary (< 100)
+            var optimizer= new MonteCarloPortfolioOptimizer(PNPortfolios, this._shortLookback, PRandSeed); // awesome
+            // var optimizer = new QuadraticProgrammingPortfolioOptimizer(this._shortLookback); // medium
+            // var optimizer = new SOCPortfolioOptimizer(); // ordinary
+            // var optimizer = new MaximumSharpeRatioPortfolioOptimizer(0, 1, 0.01); // medium 
+            // var optimizer = new MinimumVariancePortfolioOptimizer(); // good
+            // var optimizer = new UnconstrainedMeanVariancePortfolioOptimizer(); // medium, but very unstable
+            // var optimizer = new RiskParityPortfolioOptimizer(); // good
+            var optimizedWeights = optimizer.Optimize(historicalReturns);
 
             // logging
             var symbolWeights = new Dictionary<Symbol, decimal>();
