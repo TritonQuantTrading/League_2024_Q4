@@ -1,9 +1,10 @@
 {
-    "algorithm-language": "CSharp",
-    "parameters": {},
-    "description": "",
     "cloud-id": 19410702,
     "organization-id": "f6897bf981f8eeb7454289c6f10575df",
+    "channel-id": "LOCAL-3e3e863096b8f90b95888aa22013d260",
+    "description": "",
+    "algorithm-language": "CSharp",
+    "parameters": {},
     "backtestGrid": {
         "md": [],
         "lg": [

@@ -88,13 +88,13 @@ namespace QuantConnect.Algorithm.CSharp
         private int _numCoarse;
         private int _numFine;
         private int _numLong;
-        private bool _rebalance;
+        public bool _rebalance;
         private HashSet<Symbol> currentHoldings;
         private Dictionary<Symbol, decimal> targetWeights;
         private decimal adjustmentStep;
         private int _shortLookback;
-        private DateTime? firstTradeDate;
-        private DateTime? nextAdjustmentDate;
+        public DateTime? firstTradeDate;
+        public DateTime? nextAdjustmentDate;
 
         // The QCAlgoritm only has a noargs constructor
         public League2024Q4()
@@ -104,6 +104,7 @@ namespace QuantConnect.Algorithm.CSharp
         {
             // Set Dates (will be ignored in live mode)
             SetStartDate(2014, 3, 1);
+            // SetStartDate(2019, 3, 1);
             // SetStartDate(2024, 1, 1);
             SetEndDate(2024, 8, 1);
 
@@ -123,9 +124,11 @@ namespace QuantConnect.Algorithm.CSharp
 
             // Set Universe Settings
             UniverseSettings.Resolution = Resolution.Daily;
-            // UniverseSettings.Asynchronous = true;
+            UniverseSettings.Asynchronous = true;
             // UniverseSettings.ExtendedMarketHours = true; // only set to true if you are performing intraday trading
-            AddUniverse(CoarseSelectionFunction, FineSelectionFunction);
+            // AddUniverseSelection(new FundamentalUniverseSelectionModel(Select, UniverseSettings));
+            // AddUniverse(CoarseSelectionFunction);
+            // AddUniverse(CoarseSelectionFunction, FineSelectionFunction);
             // TODO: Multi-universe? But the members are only for certain unvierse, but the active securities are for all universes
             // UniverseManager[_universe.Configuration.Symbol].Members:
             // Universe.Members: When you remove an asset from a universe, LEAN usually removes the security from the Members collection and removes the security subscription. 
@@ -176,6 +179,7 @@ namespace QuantConnect.Algorithm.CSharp
             this._shortLookback = PShortLookback;
             this.firstTradeDate = null;
             this.nextAdjustmentDate = null;
+            SetUniverseSelection(new MomentumUniverseSelectionModel(this, this._lookback, this._numCoarse, this._numFine, this._numLong, this.adjustmentStep, this._shortLookback));
         }
         public IEnumerable<Symbol> CoarseSelectionFunction(IEnumerable<CoarseFundamental> coarse)
         {
@@ -206,12 +210,12 @@ namespace QuantConnect.Algorithm.CSharp
             // show universities
             foreach (var universe in UniverseManager.Values)
             {
-                Log($"Universe: {universe.Configuration.Symbol}");
+                Log($"Universe: {universe.Configuration.Symbol}: {universe.Members.Count} members");
                 // show all members
-                foreach (var member in universe.Members)
-                {
-                    Log($"  Member: {member}");
-                }
+                // foreach (var member in universe.Members)
+                // {
+                //     Log($"  Member: {member}");
+                // }
             }
         }
         public static DateTime GetNextAdjustmentDate(DateTime currentDate)
@@ -306,11 +310,11 @@ namespace QuantConnect.Algorithm.CSharp
             var currentDate = Time.ToString(DateFormat);
             foreach (var universe in UniverseManager.Values)
             {
-                Log($"{currentDate}: Universe: {universe.Configuration.Symbol}");
-                foreach (var member in universe.Members)
-                {
-                    Log($"{currentDate}:   Member: {member.Key} => {member.Value}");
-                }
+                Log($"{currentDate}: Universe: {universe.Configuration.Symbol} => {universe.Members.Count} members");
+                // foreach (var member in universe.Members)
+                // {
+                //     Log($"{currentDate}:   Member: {member.Key} => {member.Value}");
+                // }
             }
         }
 
