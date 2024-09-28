@@ -68,6 +68,47 @@ using MathNet.Numerics.Statistics;
 #endregion
 namespace QuantConnect.Algorithm.CSharp
 {
+    /*
+     * public class QCAlgorithm
+     * {
+     *     SecurityManager Securities;               // Array of Security objects.
+     *     SecurityPortfolioManager Portfolio;       // Array of SecurityHolding objects
+     *     SecurityTransactionManager Transactions;  // Transactions helper
+     *     ScheduleManager Schedule;                 // Scheduling helper
+     *     NotificationManager Notify;               // Email, SMS helper
+     *     UniverseManager Universe;                 // Universe helper
+     *
+     *     // Set up Requested Data, Cash, Time Period.
+     *     public virtual void Initialize()
+     *
+     *     // Event Handlers: (Frequently Used)
+     *     public virtual void OnData(Slice slice)
+     *     public virtual void OnSecuritiesChanged(SecurityChanges changes)
+     *     public virtual void OnEndOfDay(Symbol symbol)
+     *     public virtual void OnEndOfAlgorithm()
+     *     public virtual void OnWarmupFinished()
+     *
+     *     // Event Handlers: (Rarely Used)
+     *     public virtual void OnSplits(Splits splits)
+     *     public virtual void OnDividends(Dividends dividends)
+     *     public virtual void OnDelistings(Delistings delistings)
+     *     public virtual void OnSymbolChangedEvents(SymbolChangedEvents symbolsChanged)
+     *     public virtual void OnMarginCall(List<SubmitOrderRequest> requests)
+     *     public virtual void OnMarginCallWarning()
+     *     public virtual void OnOrderEvent(OrderEvent orderEvent) // Async, requires locks for thread safety
+     *     public virtual void OnAssignmentOrderEvent(OrderEvent assignmentEvent) // Async, requires locks for thread safety
+     *     public virtual void OnBrokerageMessage(BrokerageMessageEvent messageEvent)
+     *     public virtual void OnBrokerageDisconnect()
+     *     public virtual void OnBrokerageReconnect()
+     *
+     *     // Indicator Helpers: (There are so many useful indicators)
+     *     public AccelerationBands ABANDS(Symbol symbol, int period) { ... };
+     *     ...
+     *     public SimpleMovingAverage SMA(Symbol symbol, int period) { ... };
+     *     ...
+     *     public FilteredIdentity FilteredIdentity(Symbol symbol, TimeSpan resolution) { ... };
+     * }
+     */
     public class League2024Q4 : QCAlgorithm
     {
         // Public fields
@@ -134,7 +175,7 @@ namespace QuantConnect.Algorithm.CSharp
             // AddUniverse(CoarseSelectionFunction, FineSelectionFunction);
             // TODO: Multi-universe? But the members are only for certain unvierse, but the active securities are for all universes
             // UniverseManager[_universe.Configuration.Symbol].Members:
-            // Universe.Members: When you remove an asset from a universe, LEAN usually removes the security from the Members collection and removes the security subscription. 
+            // Universe.Members: When you remove an asset from a universe, LEAN usually removes the security from the Members collection and removes the security subscription.
             // Question: question here, why `Members` exactly the same as `ActiveSecurities`?
             // Answer: ActiveSecurities is a collection of all Members from all universes.
             // TODO: what is the Symbol of a universe? Where is it defined?
@@ -143,7 +184,7 @@ namespace QuantConnect.Algorithm.CSharp
             // To have access to all securities without considering the active or not, use `Securities` property
             // - There are still cases where the Securities may remove the security, but only from the primary collection (Securities.Values), and can still be accessed from Securities.Total
             //
-            // Universe.Selected: Different from Members, Members contains more assets 
+            // Universe.Selected: Different from Members, Members contains more assets
             // Diffs Remarks:
             //   This set might be different than QuantConnect.Data.UniverseSelection.Universe.Securities
             //   which might hold members that are no longer selected but have not been removed
@@ -375,7 +416,7 @@ namespace QuantConnect.Algorithm.CSharp
             var optimizer= new MonteCarloPortfolioOptimizer(PNPortfolios, this._shortLookback, PRandSeed); // awesome
             // var optimizer = new QuadraticProgrammingPortfolioOptimizer(this._shortLookback); // medium
             // var optimizer = new SOCPortfolioOptimizer(); // ordinary
-            // var optimizer = new MaximumSharpeRatioPortfolioOptimizer(0, 1, 0.01); // medium 
+            // var optimizer = new MaximumSharpeRatioPortfolioOptimizer(0, 1, 0.01); // medium
             // var optimizer = new MinimumVariancePortfolioOptimizer(); // good
             // var optimizer = new UnconstrainedMeanVariancePortfolioOptimizer(); // medium, but very unstable
             // var optimizer = new RiskParityPortfolioOptimizer(); // good
