@@ -59,25 +59,24 @@ using QCAlgorithmFrameworkBridge = QuantConnect.Algorithm.QCAlgorithm;
 using Accord.Math;
 using MathNet.Numerics.LinearAlgebra;
 #endregion
-
 namespace QuantConnect
 {
     /// <summary>
     /// A Monte Carlo-based portfolio optimizer that searches for the portfolio with the best Sortino ratio
     /// </summary>
-    public class MonteCarloPortfolioOptimizer : IPortfolioOptimizer
+    public class SortinoEfficientFrontierOptimizer : IPortfolioOptimizer
     {
         private readonly int _numPortfolios;
         private readonly int _lookback;
         private readonly int _randomSeed;
 
         /// <summary>
-        /// Initializes a new instance of <see cref="MonteCarloPortfolioOptimizer"/>
+        /// Initializes a new instance of <see cref="SortinoEfficientFrontierOptimizer"/>
         /// </summary>
         /// <param name="numPortfolios">Number of portfolios to generate in the Monte Carlo simulation</param>
         /// <param name="lookback">Lookback period for historical returns</param>
         /// <param name="randomSeed">Seed for the random number generator</param>
-        public MonteCarloPortfolioOptimizer(int numPortfolios = 1000, int lookback = 63, int randomSeed = 11)
+        public SortinoEfficientFrontierOptimizer(int numPortfolios = 1000, int lookback = 63, int randomSeed = 11)
         {
             _numPortfolios = numPortfolios;
             _lookback = lookback;

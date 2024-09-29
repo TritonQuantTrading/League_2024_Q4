@@ -60,12 +60,12 @@ using QCAlgorithmFrameworkBridge = QuantConnect.Algorithm.QCAlgorithm;
 
 namespace QuantConnect
 {
-    public class MinimumVariancePortfolioConstructionModel : PortfolioConstructionModel
+    public class MomentumPortfolioConstructionModel : PortfolioConstructionModel
     {
         private readonly int _shortLookback;
         private readonly decimal _adjustmentStep;
 
-        public MinimumVariancePortfolioConstructionModel(int shortLookback = 63, decimal adjustmentStep = 1.0m)
+        public MomentumPortfolioConstructionModel(int shortLookback = 63, decimal adjustmentStep = 1.0m)
         {
             _shortLookback = shortLookback;
             _adjustmentStep = adjustmentStep;

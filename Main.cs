@@ -148,7 +148,8 @@ namespace QuantConnect.Algorithm.CSharp
         }
         public override void Initialize()
         {
-            /*** Start Customized Initialization ***/
+            /************************************************************/
+            /**            Start Customized Initialization             **/
             this._momp = new Dictionary<Symbol, MomentumPercent>();
             this._lookback = PLookback;
             this._numCoarse = PNumCoarse;
@@ -161,9 +162,11 @@ namespace QuantConnect.Algorithm.CSharp
             this._shortLookback = PShortLookback;
             this.firstTradeDate = null;
             this.nextAdjustmentDate = null;
-            /***  End Customized Initialization  ***/
+            /**             End Customized Initialization              **/
+            /************************************************************/
 
-            /*** Start Default Initialization ***/
+            /************************************************************/
+            /**             Start Default Initialization               **/
             // Set Dates (will be ignored in live mode)
             SetStartDate(2019, 3, 1);
             SetEndDate(2024, 8, 1);
@@ -181,9 +184,11 @@ namespace QuantConnect.Algorithm.CSharp
             // Set Cash
             // SetCash("BTC", 10);
             SetCash(InitialCash);
-            /***  End Default Initialization  ***/
+            /**               End Default Initialization               **/
+            /************************************************************/
 
-            /*** Start Algorithm Framework ***/
+            /************************************************************/
+            /**               Start Algorithm Framework               **/
             // Set Universe Settings
             UniverseSettings.Resolution = Resolution.Daily;
             // UniverseSettings.Asynchronous = true; // This would cause backtest consistency issues, see: https://www.quantconnect.com/docs/v2/writing-algorithms/algorithm-framework/universe-selection/universe-settings#09-Asynchronous-Selection
@@ -198,8 +203,8 @@ namespace QuantConnect.Algorithm.CSharp
             // Answer: `ActiveSecurities` is a collection of all `Members` from all universes.
 
             // UniverseManager[_universe.Configuration.Symbol].Members:
-            // TODO: Multiple universes are allowed? But the members are only for certain unvierse, but the active securities are for all universes
-            // TODO: what is the Symbol of a universe? Where is it defined?
+            // FIXME: Multiple universes are allowed? But the members are only for certain unvierse, but the active securities are for all universes
+            // FIXME: what is the Symbol of a universe? Where is it defined?
             // Note: both `UniverseManager` and `ActiveSecurities` are properties of the `QCAlgorithm` class
             // To have access to all securities without considering they are activthee or not, use `Securities` property
             // - There are still cases where the Securities may remove the security, but only from the primary collection (Securities.Values), and can still be accessed from Securities.Total
@@ -221,12 +226,14 @@ namespace QuantConnect.Algorithm.CSharp
             // Set Selection
             SetUniverseSelection(new MomentumUniverseSelectionModel(this, this._lookback, this._numCoarse, this._numFine, this._numLong, this.adjustmentStep, this._shortLookback));
             // Set Alphas
+            SetAlpha(new TempAlphaModel());
             // Set Portfolio
-            // SetPortfolioConstruction(new MinimumVariancePortfolioConstructionModel());
+            SetPortfolioConstruction(new MomentumPortfolioConstructionModel());
             // Set Risk 
             // Set Execution
             SetExecution(new ImmediateExecutionModel());
-            /***  End Algorithm Framework  ***/
+            /**                End Algorithm Framework                 **/
+            /************************************************************/
 
             // Set Warmup Period
             // SetWarmUp(PLookback/2, Resolution.Daily);
@@ -411,7 +418,7 @@ namespace QuantConnect.Algorithm.CSharp
             }
 
             // Portfolio Optimizers: [5 years] awesome (>= 300), good (>= 200), medium (>= 100), ordinary (< 100)
-            var optimizer= new MonteCarloPortfolioOptimizer(PNPortfolios, this._shortLookback, PRandSeed); // awesome
+            var optimizer= new SortinoEfficientFrontierOptimizer(PNPortfolios, this._shortLookback, PRandSeed); // awesome
             // var optimizer = new QuadraticProgrammingPortfolioOptimizer(this._shortLookback); // medium
             // var optimizer = new SOCPortfolioOptimizer(); // ordinary
             // var optimizer = new MaximumSharpeRatioPortfolioOptimizer(0, 1, 0.01); // medium

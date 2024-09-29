@@ -111,8 +111,8 @@ namespace QuantConnect
             selected = selected
                 .OrderByDescending(f => f.MarketCap)
                 .Take(this._numFine);
+
             return selected.Select(f => f.Symbol);
         }
-
     }
 }
