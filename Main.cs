@@ -1,107 +1,181 @@
 #region imports
-    using System;
-    using System.Collections;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Globalization;
-    using System.Drawing;
-    using QuantConnect;
-    using QuantConnect.Algorithm.Framework;
-    using QuantConnect.Algorithm.Framework.Selection;
-    using QuantConnect.Algorithm.Framework.Alphas;
-    using QuantConnect.Algorithm.Framework.Portfolio;
-    using QuantConnect.Algorithm.Framework.Portfolio.SignalExports;
-    using QuantConnect.Algorithm.Framework.Execution;
-    using QuantConnect.Algorithm.Framework.Risk;
-    using QuantConnect.Api;
-    using QuantConnect.Parameters;
-    using QuantConnect.Benchmarks;
-    using QuantConnect.Brokerages;
-    using QuantConnect.Configuration;
-    using QuantConnect.Util;
-    using QuantConnect.Interfaces;
-    using QuantConnect.Algorithm;
-    using QuantConnect.Indicators;
-    using QuantConnect.Data;
-    using QuantConnect.Data.Auxiliary;
-    using QuantConnect.Data.Consolidators;
-    using QuantConnect.Data.Custom;
-    using QuantConnect.Data.Custom.IconicTypes;
-    using QuantConnect.DataSource;
-    using QuantConnect.Data.Fundamental;
-    using QuantConnect.Data.Market;
-    using QuantConnect.Data.Shortable;
-    using QuantConnect.Data.UniverseSelection;
-    using QuantConnect.Notifications;
-    using QuantConnect.Orders;
-    using QuantConnect.Orders.Fees;
-    using QuantConnect.Orders.Fills;
-    using QuantConnect.Orders.OptionExercise;
-    using QuantConnect.Orders.Slippage;
-    using QuantConnect.Orders.TimeInForces;
-    using QuantConnect.Python;
-    using QuantConnect.Scheduling;
-    using QuantConnect.Securities;
-    using QuantConnect.Securities.Equity;
-    using QuantConnect.Securities.Future;
-    using QuantConnect.Securities.Option;
-    using QuantConnect.Securities.Positions;
-    using QuantConnect.Securities.Forex;
-    using QuantConnect.Securities.Crypto;
-    using QuantConnect.Securities.CryptoFuture;
-    using QuantConnect.Securities.Interfaces;
-    using QuantConnect.Securities.Volatility;
-    using QuantConnect.Storage;
-    using QuantConnect.Statistics;
-    using QCAlgorithmFramework = QuantConnect.Algorithm.QCAlgorithm;
-    using QCAlgorithmFrameworkBridge = QuantConnect.Algorithm.QCAlgorithm;
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using System.Globalization;
+using System.Drawing;
+using QuantConnect;
+using QuantConnect.Algorithm.Framework;
+using QuantConnect.Algorithm.Framework.Selection;
+using QuantConnect.Algorithm.Framework.Alphas;
+using QuantConnect.Algorithm.Framework.Portfolio;
+using QuantConnect.Algorithm.Framework.Portfolio.SignalExports;
+using QuantConnect.Algorithm.Framework.Execution;
+using QuantConnect.Algorithm.Framework.Risk;
+using QuantConnect.Algorithm.Selection;
+using QuantConnect.Api;
+using QuantConnect.Parameters;
+using QuantConnect.Benchmarks;
+using QuantConnect.Brokerages;
+using QuantConnect.Configuration;
+using QuantConnect.Util;
+using QuantConnect.Interfaces;
+using QuantConnect.Algorithm;
+using QuantConnect.Indicators;
+using QuantConnect.Data;
+using QuantConnect.Data.Auxiliary;
+using QuantConnect.Data.Consolidators;
+using QuantConnect.Data.Custom;
+using QuantConnect.Data.Custom.IconicTypes;
+using QuantConnect.DataSource;
+using QuantConnect.Data.Fundamental;
+using QuantConnect.Data.Market;
+using QuantConnect.Data.Shortable;
+using QuantConnect.Data.UniverseSelection;
+using QuantConnect.Notifications;
+using QuantConnect.Orders;
+using QuantConnect.Orders.Fees;
+using QuantConnect.Orders.Fills;
+using QuantConnect.Orders.OptionExercise;
+using QuantConnect.Orders.Slippage;
+using QuantConnect.Orders.TimeInForces;
+using QuantConnect.Python;
+using QuantConnect.Scheduling;
+using QuantConnect.Securities;
+using QuantConnect.Securities.Equity;
+using QuantConnect.Securities.Future;
+using QuantConnect.Securities.Option;
+using QuantConnect.Securities.Positions;
+using QuantConnect.Securities.Forex;
+using QuantConnect.Securities.Crypto;
+using QuantConnect.Securities.CryptoFuture;
+using QuantConnect.Securities.Interfaces;
+using QuantConnect.Securities.Volatility;
+using QuantConnect.Storage;
+using QuantConnect.Statistics;
+using QCAlgorithmFramework = QuantConnect.Algorithm.QCAlgorithm;
+using QCAlgorithmFrameworkBridge = QuantConnect.Algorithm.QCAlgorithm;
+using System.Security.Cryptography.X509Certificates;
+using QLNet;
+using Accord.Math;
+using Accord.Math.Optimization;
+using Accord.Statistics;
+using Accord;
+using Fasterflect;
+using MathNet.Numerics.LinearAlgebra;
+using MathNet.Numerics.Statistics;
 #endregion
 namespace QuantConnect.Algorithm.CSharp
 {
+   
+    // Check out the overview of QCAlgorithm:
+    // https://www.quantconnect.com/docs/v2/writing-algorithms/key-concepts/algorithm-engine#03-Your-Algorithm-and-LEAN
     public class League2024Q4 : QCAlgorithm
     {
-
+        // Public fields
+        public const string DateFormat = "yyyy-MM-dd HH:mm:ss";
+        public const decimal InitialCash = 1_000_000;
         public override void Initialize()
         {
-            SetStartDate(2015, 01, 01);
-            SetEndDate(2015, 12, 01);
-            SetCash(100000);
+            /*************** Start Default Initialization *****************/
+            // Set Dates (will be ignored in live mode)
+            SetStartDate(2019, 3, 1);
+            SetEndDate(2024, 8, 1);
 
-            UniverseSettings.Asynchronous = true;
-            
-            SetUniverseSelection(new Top500());
-            AddAlpha(new EmaCrossAlphaModel());
-			SetPortfolioConstruction(new EqualWeightingPortfolioConstructionModel());
-			AddRiskManagement(new TrailingStopRiskManagementModel());
-			SetExecution(new VolumeWeightedAveragePriceExecutionModel());
+            // Set Account Currency
+            // - Default is USD $100,000
+            // - Must be done before SetCash()
+            // SetAccountCurrency("USD");
+            // SetAccountCurrency("BTC", 10);
+            //
+            // Question: How to set multiple currencies? For example, if you want to use a mix of USD and BTC
+            // Answer: No, you cannot set multiple account currency and you can only set it once. Its internal valule is used for all calculations.
+            // Reference: https://www.quantconnect.com/docs/v2/writing-algorithms/portfolio/cashbook#02-Account-Currency
+
+            // Set Cash
+            // SetCash("BTC", 10);
+            SetCash(InitialCash);
+            /***************** End Default Initialization *****************/
+
+            // Docs:
+            // Universe.Members: When you remove an asset from a universe, LEAN usually removes the security from the Members collection and removes the security subscription.
+            // ActiveSecurities: When you remove an asset from a universe, LEAN usually removes the security from the ActiveSecurities collection and removes the security subscription.
+            //
+            // Question: What's the differences between `Universe.Members` and `Universe.ActiveSecurities`?
+            // Answer: `ActiveSecurities` is a collection of all `Members` from all universes.
+            //
+            // UniverseManager[_universe.Configuration.Symbol].Members:
+            // FIXME: Multiple universes are allowed? But the members are only for certain unvierse, but the active securities are for all universes
+            // FIXME: what is the Symbol of a universe? Where is it defined?
+            // Note: both `UniverseManager` and `ActiveSecurities` are properties of the `QCAlgorithm` class
+            // To have access to all securities without considering they are activthee or not, use `Securities` property
+            // - There are still cases where the Securities may remove the security, but only from the primary collection (Securities.Values), and can still be accessed from Securities.Total
+            //
+            // Universe.Selected: Different from Members, Members may contain more assets
+            // Diffs Remarks:
+            //   This set might be different than QuantConnect.Data.UniverseSelection.Universe.Securities
+            //   which might hold members that are no longer selected but have not been removed
+            //   yet, this can be because they have some open position, orders, haven't completed
+            //   the minimum time in universe
+
+            /***************** Start Algorithm Framework ******************/
+            // Set Universe Settings
+            UniverseSettings.Resolution = Resolution.Daily;
+            // UniverseSettings.Schedule.On(DateRules.MonthStart());
+            // UniverseSettings.Asynchronous = true; // This would cause backtest consistency issues, see: https://www.quantconnect.com/docs/v2/writing-algorithms/algorithm-framework/universe-selection/universe-settings#09-Asynchronous-Selection
+            // UniverseSettings.ExtendedMarketHours = true; // only set to true if you are performing intraday trading
+            // AddUniverseSelection(new FundamentalUniverseSelectionModel(Select, UniverseSettings));
+
+            // Set Security Initializer
+            // - This allow any custom security-level settings, instead of using the global universe settings
+            // - SetSecurityInitializer(security => security.SetFeeModel(new ConstantFeeModel(0, "USD")));
+            // - SetSecurityInitializer(new MySecurityInitializer(BrokerageModel, new FuncSecuritySeeder(GetLastKnownPrices)));
+            SetSecurityInitializer(new BrokerageModelSecurityInitializer(
+                this.BrokerageModel, new FuncSecuritySeeder(this.GetLastKnownPrices)
+            ));
+            // Set Selection
+            SetUniverseSelection(new BasicUniverseSelectionModel());
+            // Set Alphas
+            SetAlpha(new TempAlphaModel());
+            // Set Portfolio
+            Settings.RebalancePortfolioOnInsightChanges = false;
+            Settings.RebalancePortfolioOnSecurityChanges = false;
+            SetPortfolioConstruction(new MomentumPortfolioConstructionModel());
+            // Set Risk 
+            // Set Execution
+            SetExecution(new ImmediateExecutionModel());
+            /****************** End Algorithm Framework *******************/
+
+            // Set Warmup Period
+            // SetWarmUp(PLookback/2, Resolution.Daily);
+        }
+        public override void OnWarmupFinished()
+        {
+            // OnWarmupFinished() is the last method called before the algorithm starts running
+            // - You can notify yourself by overriding this method: public override void OnWarmupFinished() { Log("Algorithm Ready"); }
+            // - You can train machine learning models here: public override void OnWarmupFinished() { Train(MyTrainingMethod); }
+            // The OnWarmupFinished() will be called after the warmup period even if the warmup period is not set
+            Log("Algorithm Ready");
+            // show universities
+            foreach (var universe in UniverseManager.Values)
+            {
+                Log($"Init Universe: {universe.Configuration.Symbol}: {universe.Members.Count} members");
+            }
+            // PostInitialize() method should never be overridden because it is used for predefined post-initialization routines
         }
 
-        private class Top500 : FundamentalUniverseSelectionModel
-		{
-			public override IEnumerable<Symbol> Select(QCAlgorithm algorithm, IEnumerable<Fundamental> fundamental)
-			{
-				return fundamental.Where(x => x.HasFundamentalData)
-					.OrderByDescending(x => x.MarketCap)
-					.Take(500)
-					.Select(x => x.Symbol);
-			}
-		}
-
-        private class CustomAlphaModel : AlphaModel
-		{
-			public override IEnumerable<Insight> Update(QCAlgorithm algorithm, Slice data)
-			{
-				var insights = new List<Insight>();
-				return insights;
-			}
-
-			public override void OnSecuritiesChanged(QCAlgorithm algorithm, SecurityChanges changes)
-			{
-				// changes.AddedSecurities
-				// changes.RemovedSecurities
-			}
-
-			// public override string Name { get; }
-		}
+        // public override void OnData(Slice slice)
+        // {
+        //     Log($"OnData: {Time}, {slice.Keys.Count} symbols, {slice.Bars.Count} bars");
+        //     The suggested way of handling the time-based event is using the Scheduled Events 
+        //     instead of checking the time in the OnData method
+        //     Source: https://www.quantconnect.com/docs/v2/writing-algorithms/scheduled-events
+        //
+        //     Scheduled Events let you trigger code to run at specific times of day, regardless of
+        //     your algorithm's data subscriptions. It's easier and more reliable to execute
+        //     time-based events with Scheduled Events than checking the current algorithm time in
+        //     the OnData event handler.
+        // }
     }
 }
