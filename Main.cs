@@ -68,82 +68,17 @@ using MathNet.Numerics.Statistics;
 #endregion
 namespace QuantConnect.Algorithm.CSharp
 {
-    /*
-     * public class QCAlgorithm
-     * {
-     *     SecurityManager Securities;               // Array of Security objects.
-     *     SecurityPortfolioManager Portfolio;       // Array of SecurityHolding objects
-     *     SecurityTransactionManager Transactions;  // Transactions helper
-     *     ScheduleManager Schedule;                 // Scheduling helper
-     *     NotificationManager Notify;               // Email, SMS helper
-     *     UniverseManager Universe;                 // Universe helper
-     *
-     *     // Set up Requested Data, Cash, Time Period.
-     *     public virtual void Initialize()
-     *
-     *     // Doc: https://www.quantconnect.com/docs/v2/writing-algorithms/key-concepts/event-handlers
-     *     // Event Handlers: (Frequently Used)
-     *     public virtual void OnData(Slice slice)
-     *     public virtual void OnSecuritiesChanged(SecurityChanges changes)
-     *     public virtual void OnEndOfDay(Symbol symbol)
-     *     public virtual void OnEndOfAlgorithm()
-     *     public virtual void OnWarmupFinished()
-     *
-     *     // Event Handlers: (Rarely Used)
-     *     public virtual void OnSplits(Splits splits)
-     *     public virtual void OnDividends(Dividends dividends)
-     *     public virtual void OnDelistings(Delistings delistings)
-     *     public virtual void OnSymbolChangedEvents(SymbolChangedEvents symbolsChanged)
-     *     public virtual void OnMarginCall(List<SubmitOrderRequest> requests)
-     *     public virtual void OnMarginCallWarning()
-     *     // Recommend: not to place orders in the OnOrderEvent to avoid infinite loops
-     *     public virtual void OnOrderEvent(OrderEvent orderEvent) // Async, requires locks for thread safety
-     *     public virtual void OnAssignmentOrderEvent(OrderEvent assignmentEvent) // Async, requires locks for thread safety, for options assignment events
-     *     public virtual void OnBrokerageMessage(BrokerageMessageEvent messageEvent)
-     *     public virtual void OnBrokerageDisconnect()
-     *     public virtual void OnBrokerageReconnect()
-     *
-     *     // Indicator Helpers: (There are so many useful indicators)
-     *     public AccelerationBands ABANDS(Symbol symbol, int period) { ... };
-     *     ...
-     *     public SimpleMovingAverage SMA(Symbol symbol, int period) { ... };
-     *     ...
-     *     public FilteredIdentity FilteredIdentity(Symbol symbol, TimeSpan resolution) { ... };
-     * }
-     */
+   
+    // Check out the overview of QCAlgorithm:
+    // https://www.quantconnect.com/docs/v2/writing-algorithms/key-concepts/algorithm-engine#03-Your-Algorithm-and-LEAN
     public class League2024Q4 : QCAlgorithm
     {
         // Public fields
         public const string DateFormat = "yyyy-MM-dd HH:mm:ss";
         public const decimal InitialCash = 1_000_000;
-        public const int PLookback = 252;
-        public const int PNumCoarse = 200;
-        public const int PNumFine = 70;
-        public const int PNumLong = 5;
-        public const decimal PAdjustmentStep = 1.0m;
-        public const int PNPortfolios = 1000;
-        public const int PShortLookback = 63;
-        public const int PRandSeed = 11; // 18, 2, 4, 10, 11
-
-        // Private fields
-        private int _numCoarse;
-        private int _numFine;
-        private DateTime _lastSelectionTime;
-        // The QCAlgoritm only has a noargs constructor
-        public League2024Q4()
-        {
-        }
         public override void Initialize()
         {
-            /************************************************************/
-            /**            Start Customized Initialization             **/
-            this._numCoarse = PNumCoarse;
-            this._numFine = PNumFine;
-            /**             End Customized Initialization              **/
-            /************************************************************/
-
-            /************************************************************/
-            /**             Start Default Initialization               **/
+            /*************** Start Default Initialization *****************/
             // Set Dates (will be ignored in live mode)
             SetStartDate(2019, 3, 1);
             SetEndDate(2024, 8, 1);
@@ -161,17 +96,7 @@ namespace QuantConnect.Algorithm.CSharp
             // Set Cash
             // SetCash("BTC", 10);
             SetCash(InitialCash);
-            /**               End Default Initialization               **/
-            /************************************************************/
-
-            /************************************************************/
-            /**               Start Algorithm Framework               **/
-            // Set Universe Settings
-            UniverseSettings.Resolution = Resolution.Daily;
-            UniverseSettings.Schedule.On(DateRules.MonthStart());
-            // UniverseSettings.Asynchronous = true; // This would cause backtest consistency issues, see: https://www.quantconnect.com/docs/v2/writing-algorithms/algorithm-framework/universe-selection/universe-settings#09-Asynchronous-Selection
-            // UniverseSettings.ExtendedMarketHours = true; // only set to true if you are performing intraday trading
-            // AddUniverseSelection(new FundamentalUniverseSelectionModel(Select, UniverseSettings));
+            /***************** End Default Initialization *****************/
 
             // Docs:
             // Universe.Members: When you remove an asset from a universe, LEAN usually removes the security from the Members collection and removes the security subscription.
@@ -179,7 +104,7 @@ namespace QuantConnect.Algorithm.CSharp
             //
             // Question: What's the differences between `Universe.Members` and `Universe.ActiveSecurities`?
             // Answer: `ActiveSecurities` is a collection of all `Members` from all universes.
-
+            //
             // UniverseManager[_universe.Configuration.Symbol].Members:
             // FIXME: Multiple universes are allowed? But the members are only for certain unvierse, but the active securities are for all universes
             // FIXME: what is the Symbol of a universe? Where is it defined?
@@ -194,6 +119,14 @@ namespace QuantConnect.Algorithm.CSharp
             //   yet, this can be because they have some open position, orders, haven't completed
             //   the minimum time in universe
 
+            /***************** Start Algorithm Framework ******************/
+            // Set Universe Settings
+            UniverseSettings.Resolution = Resolution.Daily;
+            // UniverseSettings.Schedule.On(DateRules.MonthStart());
+            // UniverseSettings.Asynchronous = true; // This would cause backtest consistency issues, see: https://www.quantconnect.com/docs/v2/writing-algorithms/algorithm-framework/universe-selection/universe-settings#09-Asynchronous-Selection
+            // UniverseSettings.ExtendedMarketHours = true; // only set to true if you are performing intraday trading
+            // AddUniverseSelection(new FundamentalUniverseSelectionModel(Select, UniverseSettings));
+
             // Set Security Initializer
             // - This allow any custom security-level settings, instead of using the global universe settings
             // - SetSecurityInitializer(security => security.SetFeeModel(new ConstantFeeModel(0, "USD")));
@@ -202,55 +135,47 @@ namespace QuantConnect.Algorithm.CSharp
                 this.BrokerageModel, new FuncSecuritySeeder(this.GetLastKnownPrices)
             ));
             // Set Selection
-            Settings.RebalancePortfolioOnInsightChanges = false;
-            Settings.RebalancePortfolioOnSecurityChanges = false;
-            SetUniverseSelection(new BasicUniverseSelectionModel(PNumCoarse, PNumFine));
+            SetUniverseSelection(new BasicUniverseSelectionModel());
             // Set Alphas
             SetAlpha(new TempAlphaModel());
             // Set Portfolio
-            SetPortfolioConstruction(new MomentumPortfolioConstructionModel(PLookback, PShortLookback, PNumLong, PAdjustmentStep, PNPortfolios, PRandSeed));
+            Settings.RebalancePortfolioOnInsightChanges = false;
+            Settings.RebalancePortfolioOnSecurityChanges = false;
+            SetPortfolioConstruction(new MomentumPortfolioConstructionModel());
             // Set Risk 
             // Set Execution
             SetExecution(new ImmediateExecutionModel());
-            /**                End Algorithm Framework                 **/
-            /************************************************************/
+            /****************** End Algorithm Framework *******************/
 
             // Set Warmup Period
             // SetWarmUp(PLookback/2, Resolution.Daily);
-
+        }
+        public override void OnWarmupFinished()
+        {
             // OnWarmupFinished() is the last method called before the algorithm starts running
             // - You can notify yourself by overriding this method: public override void OnWarmupFinished() { Log("Algorithm Ready"); }
             // - You can train machine learning models here: public override void OnWarmupFinished() { Train(MyTrainingMethod); }
             // The OnWarmupFinished() will be called after the warmup period even if the warmup period is not set
-
-            // PostInitialize() method should never be overridden because it is used for predefined post-initialization routines
-        }
-        public override void OnWarmupFinished()
-        {
             Log("Algorithm Ready");
             // show universities
             foreach (var universe in UniverseManager.Values)
             {
                 Log($"Init Universe: {universe.Configuration.Symbol}: {universe.Members.Count} members");
             }
+            // PostInitialize() method should never be overridden because it is used for predefined post-initialization routines
         }
 
-        public override void OnData(Slice slice)
-        {
-            // Log($"OnData: {Time}, {slice.Keys.Count} symbols, {slice.Bars.Count} bars");
-            // The suggested way of handling the time-based event is using the Scheduled Events 
-            // instead of checking the time in the OnData method
-            // Source: https://www.quantconnect.com/docs/v2/writing-algorithms/scheduled-events
-            /*
-              Scheduled Events let you trigger code to run at specific times of day, regardless of
-              your algorithm's data subscriptions. It's easier and more reliable to execute
-              time-based events with Scheduled Events than checking the current algorithm time in
-              the OnData event handler.
-            */
-        }
-
-        public override void OnSecuritiesChanged(SecurityChanges changes)
-        {
-        }
+        // public override void OnData(Slice slice)
+        // {
+        //     Log($"OnData: {Time}, {slice.Keys.Count} symbols, {slice.Bars.Count} bars");
+        //     The suggested way of handling the time-based event is using the Scheduled Events 
+        //     instead of checking the time in the OnData method
+        //     Source: https://www.quantconnect.com/docs/v2/writing-algorithms/scheduled-events
+        //
+        //     Scheduled Events let you trigger code to run at specific times of day, regardless of
+        //     your algorithm's data subscriptions. It's easier and more reliable to execute
+        //     time-based events with Scheduled Events than checking the current algorithm time in
+        //     the OnData event handler.
+        // }
     }
 }

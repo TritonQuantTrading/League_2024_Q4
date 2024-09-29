@@ -70,7 +70,12 @@ namespace QuantConnect
         public const string DateFormat = "yyyy-MM-dd HH:mm:ss";
         public const decimal NearZero = 1e-6m;
         public const decimal NearZeroPct = 1e-4m;
-        public const string PAdjustmentFrequency = "monthly"; // can be "daily", "weekly", "bi-weekly", "monthly"
+        public const int PLookback = 252;
+        public const int PShortLookback = 63;
+        public const int PNumLong = 5;
+        public const decimal PAdjustmentStep = 1.0m;
+        public const int PNPortfolios = 1000;
+        public const int PRandSeed = 11; // 18, 2, 4, 10, 11
         // readonly properties
         private readonly int _lookback;
         private readonly int _shortLookback;
@@ -82,7 +87,7 @@ namespace QuantConnect
         private DateTime _lastRebalanceTime;
         private HashSet<Symbol> _currentHoldings;
         private Dictionary<Symbol, decimal> _targetWeights;
-        public MomentumPortfolioConstructionModel(int lookback, int shortLookback, int numLong, decimal adjustmentStep, int numPortfolios, int randSeed) : base()
+        public MomentumPortfolioConstructionModel(int lookback = PLookback, int shortLookback = PShortLookback, int numLong = PNumLong, decimal adjustmentStep = PAdjustmentStep, int numPortfolios = PNPortfolios, int randSeed = PRandSeed)
         {
             // Constructor arguments
             _lookback = lookback;
@@ -164,25 +169,25 @@ namespace QuantConnect
             return false;
         }
 
-        // // Determine if the portfolio should rebalance based on the provided rebalancing function.
+        // Determine if the portfolio should rebalance based on the provided rebalancing function.
         // protected override bool IsRebalanceDue(Insight[] insights, DateTime algorithmUtc)
         // {
         //     return base.IsRebalanceDue(insights, algorithmUtc);
         // }
 
-        // // Determine the target percent for each insight.
+        // Determine the target percent for each insight.
         // protected override Dictionary<Insight, double> DetermineTargetPercent(List<Insight> activeInsights)
         // {
         //     return new Dictionary<Insight, double>();
         // }
 
-        // // Get the target insights to calculate a portfolio target percent. They will be piped to DetermineTargetPercent().
+        // Get the target insights to calculate a portfolio target percent. They will be piped to DetermineTargetPercent().
         // protected override List<Insight> GetTargetInsights()
         // {
         //     return Algorithm.Insights.GetActiveInsights(Algorithm.UtcTime).ToList();
         // }
 
-        // // Determine if the portfolio construction model should create a target for this insight.
+        // Determine if the portfolio construction model should create a target for this insight.
         // protected override bool ShouldCreateTargetForInsight(Insight insight)
         // {
         //     return base.ShouldCreateTargetForInsight(insight);

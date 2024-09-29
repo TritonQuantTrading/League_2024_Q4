@@ -65,10 +65,12 @@ namespace QuantConnect
 
     public class BasicUniverseSelectionModel : FundamentalUniverseSelectionModel
     {
+        public const int PNumCoarse = 200;
+        public const int PNumFine = 70;
 
         private int _numCoarse;
         private int _numFine;
-        public BasicUniverseSelectionModel(int numCoarse, int numFine)
+        public BasicUniverseSelectionModel(int numCoarse = PNumCoarse, int numFine = PNumFine)
         {
             this._numCoarse = numCoarse;
             this._numFine = numFine;
