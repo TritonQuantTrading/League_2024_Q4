@@ -129,19 +129,8 @@ namespace QuantConnect.Algorithm.CSharp
         public const string PAdjustmentFrequency = "monthly"; // can be "daily", "weekly", "bi-weekly", "monthly"
 
         // Private fields
-        private Dictionary<Symbol, MomentumPercent> _momp;
-        private int _lookback;
         private int _numCoarse;
         private int _numFine;
-        private int _numLong;
-        public bool _rebalance;
-        private HashSet<Symbol> currentHoldings;
-        private Dictionary<Symbol, decimal> targetWeights;
-        private decimal adjustmentStep;
-        private int _shortLookback;
-        public DateTime? firstTradeDate;
-        public DateTime? nextAdjustmentDate;
-
         // The QCAlgoritm only has a noargs constructor
         public League2024Q4()
         {
@@ -150,18 +139,8 @@ namespace QuantConnect.Algorithm.CSharp
         {
             /************************************************************/
             /**            Start Customized Initialization             **/
-            this._momp = new Dictionary<Symbol, MomentumPercent>();
-            this._lookback = PLookback;
             this._numCoarse = PNumCoarse;
             this._numFine = PNumFine;
-            this._numLong = PNumLong;
-            this._rebalance = false;
-            this.currentHoldings = new HashSet<Symbol>();
-            this.targetWeights = new Dictionary<Symbol, decimal>();
-            this.adjustmentStep = PAdjustmentStep;
-            this._shortLookback = PShortLookback;
-            this.firstTradeDate = null;
-            this.nextAdjustmentDate = null;
             /**             End Customized Initialization              **/
             /************************************************************/
 
@@ -224,11 +203,11 @@ namespace QuantConnect.Algorithm.CSharp
                 this.BrokerageModel, new FuncSecuritySeeder(this.GetLastKnownPrices)
             ));
             // Set Selection
-            SetUniverseSelection(new MomentumUniverseSelectionModel(this, this._lookback, this._numCoarse, this._numFine, this._numLong, this.adjustmentStep, this._shortLookback));
+            SetUniverseSelection(new BasicUniverseSelectionModel(PNumCoarse, PNumFine));
             // Set Alphas
             SetAlpha(new TempAlphaModel());
             // Set Portfolio
-            SetPortfolioConstruction(new MomentumPortfolioConstructionModel());
+            SetPortfolioConstruction(new MomentumPortfolioConstructionModel(PLookback, PShortLookback, PNumLong, PAdjustmentStep, PRandSeed));
             // Set Risk 
             // Set Execution
             SetExecution(new ImmediateExecutionModel());
@@ -254,26 +233,7 @@ namespace QuantConnect.Algorithm.CSharp
                 Log($"Init Universe: {universe.Configuration.Symbol}: {universe.Members.Count} members");
             }
         }
-        public static DateTime GetNextAdjustmentDate(DateTime currentDate)
-        {
-            if (PAdjustmentFrequency.Equals("weekly"))
-            {
-                return currentDate.AddDays(7);
-            }
-            else if (PAdjustmentFrequency.Equals("bi-weekly"))
-            {
-                return currentDate.AddDays(14);
-            }
-            else if (PAdjustmentFrequency.Equals("monthly"))
-            {
-                var nextMonth = currentDate.AddDays(32);
-                return nextMonth.AddDays(-nextMonth.Day + 1);
-            }
-            else
-            {
-                throw new ArgumentException($"Unsupported adjustment frequency: {PAdjustmentFrequency}");
-            }
-        }
+        
         public override void OnData(Slice slice)
         {
             // Log($"OnData: {Time}, {slice.Keys.Count} symbols, {slice.Bars.Count} bars");

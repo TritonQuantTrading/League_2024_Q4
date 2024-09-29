@@ -63,44 +63,18 @@ using QuantConnect.Algorithm.CSharp;
 namespace QuantConnect
 {
 
-    public class MomentumUniverseSelectionModel : FundamentalUniverseSelectionModel
+    public class BasicUniverseSelectionModel : FundamentalUniverseSelectionModel
     {
 
-        private int _lookback;
         private int _numCoarse;
         private int _numFine;
-        private int _numLong;
-        private decimal _adjustmentStep;
-        private int _shortLookback;
-        private readonly League2024Q4 _algo;
-        public MomentumUniverseSelectionModel(League2024Q4 algo, int lookback, int numCoarse, int numFine, int numLong, decimal adjustmentStep, int shortLookback)
+        public BasicUniverseSelectionModel(int numCoarse, int numFine)
         {
-            this._algo = algo;
-            this._lookback = lookback;
             this._numCoarse = numCoarse;
             this._numFine = numFine;
-            this._numLong = numLong;
-            this._adjustmentStep = adjustmentStep;
-            this._shortLookback = shortLookback;
         }
         public override IEnumerable<Symbol> Select(QCAlgorithmFramework algorithm, IEnumerable<Fundamental> fundamental)
         {
-            // TODO: the part related to this._algo should be removed in the future to avoid functionality overlap
-            /************************************************************/
-            /** Start of the part that should be removed in the future **/
-            if (this._algo.nextAdjustmentDate != null && this._algo.Time < this._algo.nextAdjustmentDate)
-            {
-                return this._algo.Universe.Unchanged;
-            }
-            this._algo._rebalance = true;
-            if (this._algo.firstTradeDate == null)
-            {
-                this._algo.firstTradeDate = this._algo.Time;
-                this._algo.nextAdjustmentDate = League2024Q4.GetNextAdjustmentDate(this._algo.Time);
-                this._algo._rebalance = true;
-            }
-            /**  End of the part that should be removed in the future  **/
-            /************************************************************/
             var selected = fundamental;
             // coarse selection
             selected = selected

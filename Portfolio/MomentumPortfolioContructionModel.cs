@@ -62,14 +62,62 @@ namespace QuantConnect
 {
     public class MomentumPortfolioConstructionModel : PortfolioConstructionModel
     {
-        private readonly int _shortLookback;
-        private readonly decimal _adjustmentStep;
-
-        public MomentumPortfolioConstructionModel(int shortLookback = 63, decimal adjustmentStep = 1.0m)
+        private Dictionary<Symbol, MomentumPercent> _momp;
+        private int _lookback;
+        private int _shortLookback;
+        private int _numLong;
+        private bool _rebalance;
+        private decimal _adjustmentStep;
+        private int _randSeed;
+        private HashSet<Symbol> currentHoldings;
+        private Dictionary<Symbol, decimal> targetWeights;
+        public MomentumPortfolioConstructionModel(int lookback, int shortLookback, int numLong, decimal adjustmentStep, int randSeed)
         {
+            _lookback = lookback;
             _shortLookback = shortLookback;
+            _numLong = numLong;
             _adjustmentStep = adjustmentStep;
+            _randSeed = randSeed;
+
+            _rebalance = true;
+            currentHoldings = new HashSet<Symbol>();
+            targetWeights = new Dictionary<Symbol, decimal>();
+            _momp = new Dictionary<Symbol, MomentumPercent>();
+        }
+        // Create list of PortfolioTarget objects from Insights.
+        public override List<PortfolioTarget> CreateTargets(QCAlgorithm algorithm, Insight[] insights)
+        {
+            return (List<PortfolioTarget>)base.CreateTargets(algorithm, insights);
         }
 
+        // Determine if the portfolio should rebalance based on the provided rebalancing function.
+        protected override bool IsRebalanceDue(Insight[] insights, DateTime algorithmUtc)
+        {
+            return base.IsRebalanceDue(insights, algorithmUtc);
+        }
+
+        // Determine the target percent for each insight.
+        protected override Dictionary<Insight, double> DetermineTargetPercent(List<Insight> activeInsights)
+        {
+            return new Dictionary<Insight, double>();
+        }
+
+        // Get the target insights to calculate a portfolio target percent. They will be piped to DetermineTargetPercent().
+        protected override List<Insight> GetTargetInsights()
+        {
+            return base.GetTargetInsights();
+        }
+
+        // Determine if the portfolio construction model should create a target for this insight.
+        protected override bool ShouldCreateTargetForInsight(Insight insight)
+        {
+            return base.ShouldCreateTargetForInsight(insight);
+        }
+
+        // Security change details.
+        public override void OnSecuritiesChanged(QCAlgorithm algorithm, SecurityChanges changes)
+        {
+            base.OnSecuritiesChanged(algorithm, changes);
+        }
     }
 }
