@@ -124,11 +124,11 @@ namespace QuantConnect.Algorithm.CSharp
         public const int PNPortfolios = 1000;
         public const int PShortLookback = 63;
         public const int PRandSeed = 11; // 18, 2, 4, 10, 11
-        public const string PAdjustmentFrequency = "monthly"; // can be "daily", "weekly", "bi-weekly", "monthly"
 
         // Private fields
         private int _numCoarse;
         private int _numFine;
+        private DateTime _lastSelectionTime;
         // The QCAlgoritm only has a noargs constructor
         public League2024Q4()
         {
@@ -168,6 +168,7 @@ namespace QuantConnect.Algorithm.CSharp
             /**               Start Algorithm Framework               **/
             // Set Universe Settings
             UniverseSettings.Resolution = Resolution.Daily;
+            UniverseSettings.Schedule.On(DateRules.MonthStart());
             // UniverseSettings.Asynchronous = true; // This would cause backtest consistency issues, see: https://www.quantconnect.com/docs/v2/writing-algorithms/algorithm-framework/universe-selection/universe-settings#09-Asynchronous-Selection
             // UniverseSettings.ExtendedMarketHours = true; // only set to true if you are performing intraday trading
             // AddUniverseSelection(new FundamentalUniverseSelectionModel(Select, UniverseSettings));
@@ -201,6 +202,8 @@ namespace QuantConnect.Algorithm.CSharp
                 this.BrokerageModel, new FuncSecuritySeeder(this.GetLastKnownPrices)
             ));
             // Set Selection
+            Settings.RebalancePortfolioOnInsightChanges = false;
+            Settings.RebalancePortfolioOnSecurityChanges = false;
             SetUniverseSelection(new BasicUniverseSelectionModel(PNumCoarse, PNumFine));
             // Set Alphas
             SetAlpha(new TempAlphaModel());
@@ -231,7 +234,7 @@ namespace QuantConnect.Algorithm.CSharp
                 Log($"Init Universe: {universe.Configuration.Symbol}: {universe.Members.Count} members");
             }
         }
-        
+
         public override void OnData(Slice slice)
         {
             // Log($"OnData: {Time}, {slice.Keys.Count} symbols, {slice.Bars.Count} bars");
@@ -244,49 +247,10 @@ namespace QuantConnect.Algorithm.CSharp
               time-based events with Scheduled Events than checking the current algorithm time in
               the OnData event handler.
             */
-            // foreach (var kvp in this._momp)
-            // {
-            //     kvp.Value.Update(Time, Securities[kvp.Key].Close);
-            // }
-
-            // if (!this._rebalance)
-            // {
-            //     return;
-            // }
-
-            // var sortedMom = (from kvp in this._momp
-            //                  where kvp.Value.IsReady
-            //                  orderby kvp.Value.Current.Value descending
-            //                  select kvp.Key).ToList();
-            // var selected = sortedMom.Take(this._numLong).ToList();
-            // var newHoldings = new HashSet<Symbol>(selected);
-
-            // if (!newHoldings.SetEquals(this.currentHoldings) || this.firstTradeDate == Time)
-            // {
-            //     if (selected.Count > 0)
-            //     {
-            //         var optimalWeights = OptimizePortfolio(selected);
-            //         this.targetWeights = selected.Zip(optimalWeights, (k, v) => new { k, v }).ToDictionary(x => x.k, x => x.v);
-            //         this.currentHoldings = newHoldings;
-            //         AdjustPortfolio();
-            //     }
-            // }
-
-            // this._rebalance = false;
-            // this.nextAdjustmentDate = GetNextAdjustmentDate(Time);
         }
 
         public override void OnSecuritiesChanged(SecurityChanges changes)
         {
-            // Log the changes
-            var currentDate = Time.ToString(DateFormat);
-            foreach (var universe in UniverseManager.Values)
-            {
-                Log($"{currentDate}: Updated Universe: {universe.Configuration.Symbol}: {universe.Members.Count} members");
-            }
-            var addedStr = string.Join(", ", changes.AddedSecurities.Select(security => security.Symbol.Value));
-            var removedStr = string.Join(", ", changes.RemovedSecurities.Select(security => security.Symbol.Value));
-            Log($"{currentDate}: Security Changes: (+{changes.AddedSecurities.Count})[{addedStr}], (-{changes.RemovedSecurities.Count})[{removedStr}]");
         }
     }
 }

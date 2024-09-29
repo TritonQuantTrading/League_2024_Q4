@@ -59,6 +59,7 @@ using QCAlgorithmFrameworkBridge = QuantConnect.Algorithm.QCAlgorithm;
 using Ionic.Zip;
 using QuantConnect.Algorithm.Framework.Alphas.Analysis;
 using Accord;
+using QLNet;
 #endregion
 
 namespace QuantConnect
@@ -69,58 +70,57 @@ namespace QuantConnect
         public const string DateFormat = "yyyy-MM-dd HH:mm:ss";
         public const decimal NearZero = 1e-6m;
         public const decimal NearZeroPct = 1e-4m;
+        public const string PAdjustmentFrequency = "monthly"; // can be "daily", "weekly", "bi-weekly", "monthly"
         // readonly properties
         private readonly int _lookback;
         private readonly int _shortLookback;
         private readonly int _numLong;
         private readonly decimal _adjustmentStep;
-        private readonly int _numPortfolios;
-        private readonly int _randSeed;
         private readonly Dictionary<Symbol, MomentumPercent> _momp;
         private readonly IPortfolioOptimizer _optimizer;
         // properties
-        private bool _rebalance;
+        private DateTime _lastRebalanceTime;
         private HashSet<Symbol> _currentHoldings;
         private Dictionary<Symbol, decimal> _targetWeights;
-        public MomentumPortfolioConstructionModel(int lookback, int shortLookback, int numLong, decimal adjustmentStep, int numPortfolios, int randSeed)
+        public MomentumPortfolioConstructionModel(int lookback, int shortLookback, int numLong, decimal adjustmentStep, int numPortfolios, int randSeed) : base()
         {
             // Constructor arguments
             _lookback = lookback;
             _shortLookback = shortLookback;
             _numLong = numLong;
             _adjustmentStep = adjustmentStep;
-            _randSeed = randSeed;
 
-            // Other properties
+            // Readonly properties
             _momp = new Dictionary<Symbol, MomentumPercent>();
-            _currentHoldings = new HashSet<Symbol>();
-            _targetWeights = new Dictionary<Symbol, decimal>();
 
             // Choose a portfolio optimizer: [5 years] awesome (>= 300), good (>= 200), medium (>= 100), ordinary (< 100)
             _optimizer = new SortinoEfficientFrontierOptimizer(numPortfolios, shortLookback, randSeed); // awesome
+
             // _optimizer = new QuadraticProgrammingPortfolioOptimizer(shortLookback); // medium
             // _optimizer = new SOCPortfolioOptimizer(); // ordinary
             // _optimizer = new MaximumSharpeRatioPortfolioOptimizer(0, 1, 0.01); // medium
             // _optimizer = new MinimumVariancePortfolioOptimizer(); // good
             // _optimizer = new UnconstrainedMeanVariancePortfolioOptimizer(); // medium, but very unstable
             // _optimizer = new RiskParityPortfolioOptimizer(); // good
-            
-            // Mutable properties
-            _rebalance = true;
+
+            // Other properties
+            _currentHoldings = new HashSet<Symbol>();
+            _targetWeights = new Dictionary<Symbol, decimal>();
         }
         // Create list of PortfolioTarget objects from Insights.
         public override List<PortfolioTarget> CreateTargets(QCAlgorithm algorithm, Insight[] insights)
         {
-               foreach (var kvp in this._momp)
+            foreach (var kvp in this._momp)
             {
                 kvp.Value.Update(algorithm.Time, algorithm.Securities[kvp.Key].Close);
             }
 
-            if (!this._rebalance)
-            {
-                // return;
-            }
+            var targets = new List<IPortfolioTarget>();
 
+            if (!IsRebalanceDue(algorithm.UtcTime))
+            {
+                return targets.Cast<PortfolioTarget>().ToList();
+            }
             var sortedMom = (from kvp in this._momp
                              where kvp.Value.IsReady
                              orderby kvp.Value.Current.Value descending
@@ -128,7 +128,7 @@ namespace QuantConnect
             var selected = sortedMom.Take(this._numLong).ToList();
             var newHoldings = new HashSet<Symbol>(selected);
 
-            if (!newHoldings.SetEquals(this._currentHoldings))
+            if (!newHoldings.SetEquals(this._currentHoldings) || this._lastRebalanceTime == algorithm.UtcTime)
             {
                 if (selected.Count > 0)
                 {
@@ -139,46 +139,59 @@ namespace QuantConnect
                 }
             }
 
-            this._rebalance = false;
-            var targets = new List<PortfolioTarget>();
             foreach (var kvp in this._targetWeights)
             {
                 var symbol = kvp.Key;
                 var weight = kvp.Value;
-                var target = new PortfolioTarget(symbol, weight);
+                var quantity = algorithm.CalculateOrderQuantity(symbol, weight);
+                var target = new PortfolioTarget(symbol, quantity);
                 targets.Add(target);
             }
-            return targets;
+            return targets.Cast<PortfolioTarget>().ToList();
+        }
+        private bool IsRebalanceDue(DateTime algorithmUtc)
+        {
+            if (_lastRebalanceTime == default(DateTime))
+            {
+                _lastRebalanceTime = algorithmUtc;
+                return true;
+            }
+            if (algorithmUtc.Month != _lastRebalanceTime.Month)
+            {
+                _lastRebalanceTime = algorithmUtc;
+                return true;
+            }
+            return false;
         }
 
-        // Determine if the portfolio should rebalance based on the provided rebalancing function.
-        protected override bool IsRebalanceDue(Insight[] insights, DateTime algorithmUtc)
-        {
-            return base.IsRebalanceDue(insights, algorithmUtc);
-        }
+        // // Determine if the portfolio should rebalance based on the provided rebalancing function.
+        // protected override bool IsRebalanceDue(Insight[] insights, DateTime algorithmUtc)
+        // {
+        //     return base.IsRebalanceDue(insights, algorithmUtc);
+        // }
 
-        // Determine the target percent for each insight.
-        protected override Dictionary<Insight, double> DetermineTargetPercent(List<Insight> activeInsights)
-        {
-            return new Dictionary<Insight, double>();
-        }
+        // // Determine the target percent for each insight.
+        // protected override Dictionary<Insight, double> DetermineTargetPercent(List<Insight> activeInsights)
+        // {
+        //     return new Dictionary<Insight, double>();
+        // }
 
-        // Get the target insights to calculate a portfolio target percent. They will be piped to DetermineTargetPercent().
-        protected override List<Insight> GetTargetInsights()
-        {
-            return Algorithm.Insights.GetActiveInsights(Algorithm.UtcTime).ToList();
-        }
+        // // Get the target insights to calculate a portfolio target percent. They will be piped to DetermineTargetPercent().
+        // protected override List<Insight> GetTargetInsights()
+        // {
+        //     return Algorithm.Insights.GetActiveInsights(Algorithm.UtcTime).ToList();
+        // }
 
-        // Determine if the portfolio construction model should create a target for this insight.
-        protected override bool ShouldCreateTargetForInsight(Insight insight)
-        {
-            return base.ShouldCreateTargetForInsight(insight);
-        }
+        // // Determine if the portfolio construction model should create a target for this insight.
+        // protected override bool ShouldCreateTargetForInsight(Insight insight)
+        // {
+        //     return base.ShouldCreateTargetForInsight(insight);
+        // }
 
         // Security change details.
         public override void OnSecuritiesChanged(QCAlgorithm algorithm, SecurityChanges changes)
         {
-            base.OnSecuritiesChanged(algorithm, changes);
+            // base.OnSecuritiesChanged(algorithm, changes);
 
             foreach (var symbol in changes.RemovedSecurities.Select(security => security.Symbol))
             {
@@ -211,6 +224,15 @@ namespace QuantConnect
                 }
             }
 
+            // Log the changes
+            var currentDate = algorithm.Time.ToString(DateFormat);
+            foreach (var universe in algorithm.UniverseManager.Values)
+            {
+                algorithm.Log($"{currentDate}: Updated Universe: {universe.Configuration.Symbol}: {universe.Members.Count} members");
+            }
+            var addedStr = string.Join(", ", changes.AddedSecurities.Select(security => security.Symbol.Value));
+            var removedStr = string.Join(", ", changes.RemovedSecurities.Select(security => security.Symbol.Value));
+            algorithm.Log($"{currentDate}: Security Changes: (+{changes.AddedSecurities.Count})[{addedStr}], (-{changes.RemovedSecurities.Count})[{removedStr}]");
         }
         // Customized helper methods
         public void AdjustPortfolio(QCAlgorithm algorithm)
@@ -253,7 +275,8 @@ namespace QuantConnect
             algorithm.Log($"{currentDate}: Targeted Holdings: [{targetedWeightsStr}]");
             var holdingsStr = string.Join(", ", holdings.OrderByDescending(kvp => kvp.Value).Select(kvp => $"{kvp.Key}: {kvp.Value:F2}%"));
             algorithm.Log($"{currentDate}: Holdings[{sumOfAllHoldings:F2}%]: [{holdingsStr}]");
-        }public List<decimal> OptimizePortfolio(QCAlgorithm algorithm, List<Symbol> selectedSymbols)
+        }
+        public List<decimal> OptimizePortfolio(QCAlgorithm algorithm, List<Symbol> selectedSymbols)
         {
             // historical returns matrix and symbols
             var (historicalReturns, validSymbols) = GetHistoricalReturnsMatrix(algorithm, selectedSymbols);
@@ -284,7 +307,6 @@ namespace QuantConnect
         {
             var shortLookback = this._shortLookback;
 
-            // TODO: methods to get historical returns matrix,
             var historySlices = algorithm.History(selectedSymbols, shortLookback, Resolution.Daily);
 
             var history = historySlices
