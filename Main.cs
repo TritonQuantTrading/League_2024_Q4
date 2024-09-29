@@ -115,8 +115,6 @@ namespace QuantConnect.Algorithm.CSharp
     {
         // Public fields
         public const string DateFormat = "yyyy-MM-dd HH:mm:ss";
-        public const decimal NearZero = 1e-6m;
-        public const decimal NearZeroPct = 1e-4m;
         public const decimal InitialCash = 1_000_000;
         public const int PLookback = 252;
         public const int PNumCoarse = 200;
@@ -246,36 +244,36 @@ namespace QuantConnect.Algorithm.CSharp
               time-based events with Scheduled Events than checking the current algorithm time in
               the OnData event handler.
             */
-            foreach (var kvp in this._momp)
-            {
-                kvp.Value.Update(Time, Securities[kvp.Key].Close);
-            }
+            // foreach (var kvp in this._momp)
+            // {
+            //     kvp.Value.Update(Time, Securities[kvp.Key].Close);
+            // }
 
-            if (!this._rebalance)
-            {
-                return;
-            }
+            // if (!this._rebalance)
+            // {
+            //     return;
+            // }
 
-            var sortedMom = (from kvp in this._momp
-                             where kvp.Value.IsReady
-                             orderby kvp.Value.Current.Value descending
-                             select kvp.Key).ToList();
-            var selected = sortedMom.Take(this._numLong).ToList();
-            var newHoldings = new HashSet<Symbol>(selected);
+            // var sortedMom = (from kvp in this._momp
+            //                  where kvp.Value.IsReady
+            //                  orderby kvp.Value.Current.Value descending
+            //                  select kvp.Key).ToList();
+            // var selected = sortedMom.Take(this._numLong).ToList();
+            // var newHoldings = new HashSet<Symbol>(selected);
 
-            if (!newHoldings.SetEquals(this.currentHoldings) || this.firstTradeDate == Time)
-            {
-                if (selected.Count > 0)
-                {
-                    var optimalWeights = OptimizePortfolio(selected);
-                    this.targetWeights = selected.Zip(optimalWeights, (k, v) => new { k, v }).ToDictionary(x => x.k, x => x.v);
-                    this.currentHoldings = newHoldings;
-                    AdjustPortfolio();
-                }
-            }
+            // if (!newHoldings.SetEquals(this.currentHoldings) || this.firstTradeDate == Time)
+            // {
+            //     if (selected.Count > 0)
+            //     {
+            //         var optimalWeights = OptimizePortfolio(selected);
+            //         this.targetWeights = selected.Zip(optimalWeights, (k, v) => new { k, v }).ToDictionary(x => x.k, x => x.v);
+            //         this.currentHoldings = newHoldings;
+            //         AdjustPortfolio();
+            //     }
+            // }
 
-            this._rebalance = false;
-            this.nextAdjustmentDate = GetNextAdjustmentDate(Time);
+            // this._rebalance = false;
+            // this.nextAdjustmentDate = GetNextAdjustmentDate(Time);
         }
 
         public override void OnSecuritiesChanged(SecurityChanges changes)
@@ -290,48 +288,5 @@ namespace QuantConnect.Algorithm.CSharp
             var removedStr = string.Join(", ", changes.RemovedSecurities.Select(security => security.Symbol.Value));
             Log($"{currentDate}: Security Changes: (+{changes.AddedSecurities.Count})[{addedStr}], (-{changes.RemovedSecurities.Count})[{removedStr}]");
         }
-
-        public void AdjustPortfolio()
-        {
-            var currentSymbols = Portfolio.Keys.ToHashSet();
-            var targetSymbols = this.targetWeights.Keys.ToHashSet();
-
-            var removedSymbols = currentSymbols.Except(targetSymbols);
-            foreach (var symbol in removedSymbols)
-            {
-                Liquidate(symbol);
-            }
-
-            foreach (var kvp in this.targetWeights)
-            {
-                var symbol = kvp.Key;
-                var targetWeight = kvp.Value;
-                var currentWeight = Portfolio[symbol].Quantity / Portfolio.TotalPortfolioValue;
-                if (!Portfolio.ContainsKey(symbol))
-                {
-                    currentWeight = 0;
-                }
-                var adjustedWeight = currentWeight * (1 - this.adjustmentStep) + targetWeight * this.adjustmentStep;
-                SetHoldings(symbol, adjustedWeight);
-            }
-
-            var holdings = new Dictionary<string, decimal>();
-            var sumOfAllHoldings = 0m;
-            foreach (var symbol in Portfolio.Keys)
-            {
-                var holdingPercentage = Portfolio[symbol].HoldingsValue / Portfolio.TotalPortfolioValue * 100;
-                if (holdingPercentage.IsGreaterThan(NearZeroPct))
-                {
-                    sumOfAllHoldings += holdingPercentage;
-                    holdings[symbol.Value] = Math.Round(holdingPercentage, 2);
-                }
-            }
-            var currentDate = Time.ToString(DateFormat);
-            var targetedWeightsStr = string.Join(", ", this.targetWeights.OrderByDescending(kvp => kvp.Value).Select(kvp => $"{kvp.Key.Value}: {kvp.Value * 100:F2}%"));
-            Log($"{currentDate}: Targeted Holdings: [{targetedWeightsStr}]");
-            var holdingsStr = string.Join(", ", holdings.OrderByDescending(kvp => kvp.Value).Select(kvp => $"{kvp.Key}: {kvp.Value:F2}%"));
-            Log($"{currentDate}: Holdings[{sumOfAllHoldings:F2}%]: [{holdingsStr}]");
-        }
-
     }
 }

@@ -57,12 +57,18 @@ using QuantConnect.Statistics;
 using QCAlgorithmFramework = QuantConnect.Algorithm.QCAlgorithm;
 using QCAlgorithmFrameworkBridge = QuantConnect.Algorithm.QCAlgorithm;
 using Ionic.Zip;
+using QuantConnect.Algorithm.Framework.Alphas.Analysis;
+using Accord;
 #endregion
 
 namespace QuantConnect
 {
     public class MomentumPortfolioConstructionModel : PortfolioConstructionModel
     {
+        // public constants
+        public const string DateFormat = "yyyy-MM-dd HH:mm:ss";
+        public const decimal NearZero = 1e-6m;
+        public const decimal NearZeroPct = 1e-4m;
         // readonly properties
         private readonly int _lookback;
         private readonly int _shortLookback;
@@ -71,11 +77,11 @@ namespace QuantConnect
         private readonly int _numPortfolios;
         private readonly int _randSeed;
         private readonly Dictionary<Symbol, MomentumPercent> _momp;
-        private readonly HashSet<Symbol> _currentHoldings;
-        private readonly Dictionary<Symbol, decimal> _targetWeights;
         private readonly IPortfolioOptimizer _optimizer;
         // properties
         private bool _rebalance;
+        private HashSet<Symbol> _currentHoldings;
+        private Dictionary<Symbol, decimal> _targetWeights;
         public MomentumPortfolioConstructionModel(int lookback, int shortLookback, int numLong, decimal adjustmentStep, int numPortfolios, int randSeed)
         {
             // Constructor arguments
@@ -105,7 +111,44 @@ namespace QuantConnect
         // Create list of PortfolioTarget objects from Insights.
         public override List<PortfolioTarget> CreateTargets(QCAlgorithm algorithm, Insight[] insights)
         {
-            return (List<PortfolioTarget>)base.CreateTargets(algorithm, insights);
+               foreach (var kvp in this._momp)
+            {
+                kvp.Value.Update(algorithm.Time, algorithm.Securities[kvp.Key].Close);
+            }
+
+            if (!this._rebalance)
+            {
+                // return;
+            }
+
+            var sortedMom = (from kvp in this._momp
+                             where kvp.Value.IsReady
+                             orderby kvp.Value.Current.Value descending
+                             select kvp.Key).ToList();
+            var selected = sortedMom.Take(this._numLong).ToList();
+            var newHoldings = new HashSet<Symbol>(selected);
+
+            if (!newHoldings.SetEquals(this._currentHoldings))
+            {
+                if (selected.Count > 0)
+                {
+                    var optimalWeights = OptimizePortfolio(algorithm, selected);
+                    this._targetWeights = selected.Zip(optimalWeights, (k, v) => new { k, v }).ToDictionary(x => x.k, x => x.v);
+                    this._currentHoldings = newHoldings;
+                    AdjustPortfolio(algorithm);
+                }
+            }
+
+            this._rebalance = false;
+            var targets = new List<PortfolioTarget>();
+            foreach (var kvp in this._targetWeights)
+            {
+                var symbol = kvp.Key;
+                var weight = kvp.Value;
+                var target = new PortfolioTarget(symbol, weight);
+                targets.Add(target);
+            }
+            return targets;
         }
 
         // Determine if the portfolio should rebalance based on the provided rebalancing function.
@@ -123,7 +166,6 @@ namespace QuantConnect
         // Get the target insights to calculate a portfolio target percent. They will be piped to DetermineTargetPercent().
         protected override List<Insight> GetTargetInsights()
         {
-            // return InsightCollection.GetActiveInsights(Algorithm.UtcTime).ToList();
             return Algorithm.Insights.GetActiveInsights(Algorithm.UtcTime).ToList();
         }
 
@@ -153,7 +195,6 @@ namespace QuantConnect
                     this._momp[symbol] = new MomentumPercent(this._lookback);
                 }
             }
-
             var addedSymbols = (from kvp in this._momp
                                 where !kvp.Value.IsReady
                                 select kvp.Key).ToList();
@@ -169,17 +210,58 @@ namespace QuantConnect
                     this._momp[symbol].Update(item);
                 }
             }
+
         }
         // Customized helper methods
-        public List<decimal> OptimizePortfolio(List<Symbol> selectedSymbols)
+        public void AdjustPortfolio(QCAlgorithm algorithm)
+        {
+            var currentSymbols = algorithm.Portfolio.Keys.ToHashSet();
+            var targetSymbols = this._targetWeights.Keys.ToHashSet();
+
+            var removedSymbols = currentSymbols.Except(targetSymbols);
+            foreach (var symbol in removedSymbols)
+            {
+                algorithm.Liquidate(symbol);
+            }
+
+            foreach (var kvp in this._targetWeights)
+            {
+                var symbol = kvp.Key;
+                var targetWeight = kvp.Value;
+                var currentWeight = algorithm.Portfolio[symbol].Quantity / algorithm.Portfolio.TotalPortfolioValue;
+                if (!algorithm.Portfolio.ContainsKey(symbol))
+                {
+                    currentWeight = 0;
+                }
+                var adjustedWeight = currentWeight * (1 - this._adjustmentStep) + targetWeight * this._adjustmentStep;
+                algorithm.SetHoldings(symbol, adjustedWeight);
+            }
+
+            var holdings = new Dictionary<string, decimal>();
+            var sumOfAllHoldings = 0m;
+            foreach (var symbol in algorithm.Portfolio.Keys)
+            {
+                var holdingPercentage = algorithm.Portfolio[symbol].HoldingsValue / algorithm.Portfolio.TotalPortfolioValue * 100;
+                if (holdingPercentage.IsGreaterThan(NearZeroPct))
+                {
+                    sumOfAllHoldings += holdingPercentage;
+                    holdings[symbol.Value] = Math.Round(holdingPercentage, 2);
+                }
+            }
+            var currentDate = algorithm.Time.ToString(DateFormat);
+            var targetedWeightsStr = string.Join(", ", this._targetWeights.OrderByDescending(kvp => kvp.Value).Select(kvp => $"{kvp.Key.Value}: {kvp.Value * 100:F2}%"));
+            algorithm.Log($"{currentDate}: Targeted Holdings: [{targetedWeightsStr}]");
+            var holdingsStr = string.Join(", ", holdings.OrderByDescending(kvp => kvp.Value).Select(kvp => $"{kvp.Key}: {kvp.Value:F2}%"));
+            algorithm.Log($"{currentDate}: Holdings[{sumOfAllHoldings:F2}%]: [{holdingsStr}]");
+        }public List<decimal> OptimizePortfolio(QCAlgorithm algorithm, List<Symbol> selectedSymbols)
         {
             // historical returns matrix and symbols
-            var (historicalReturns, validSymbols) = GetHistoricalReturnsMatrix(selectedSymbols);
+            var (historicalReturns, validSymbols) = GetHistoricalReturnsMatrix(algorithm, selectedSymbols);
 
             int nAssets = validSymbols.Count;
             if (nAssets == 0 || historicalReturns.GetLength(0) == 0)
             {
-                // Log("[OptimizePortfolio] No valid symbols with sufficient historical data. Returning empty weights.");
+                algorithm.Log("[OptimizePortfolio] No valid symbols with sufficient historical data. Returning empty weights.");
                 return new List<decimal>();
             }
 
@@ -194,19 +276,16 @@ namespace QuantConnect
                 symbolWeights[validSymbols[i]] = (decimal)optimizedWeights[i];
             }
             var weightsStr = string.Join(", ", symbolWeights.OrderByDescending(kvp => kvp.Value).Select(kvp => $"{kvp.Key.Value}: {kvp.Value * 100:F2}%"));
-            // Log($"[OptimizePortfolio] Optimized Weights: {weightsStr}");
-
+            algorithm.Log($"[OptimizePortfolio] Optimized Weights: {weightsStr}");
             return optimizedWeights.Select(w => (decimal)w).ToList();
         }
 
-        private (double[,] historicalReturns, List<Symbol> validSymbols) GetHistoricalReturnsMatrix(List<Symbol> selectedSymbols)
+        private (double[,] historicalReturns, List<Symbol> validSymbols) GetHistoricalReturnsMatrix(QCAlgorithm algorithm, List<Symbol> selectedSymbols)
         {
             var shortLookback = this._shortLookback;
 
             // TODO: methods to get historical returns matrix,
-            // I heard that using an indicator may be better than request history data
-
-            var historySlices = History(selectedSymbols, shortLookback, Resolution.Daily);
+            var historySlices = algorithm.History(selectedSymbols, shortLookback, Resolution.Daily);
 
             var history = historySlices
                 .SelectMany(slice => slice.Bars)
@@ -223,14 +302,14 @@ namespace QuantConnect
             {
                 if (!history.ContainsKey(symbol))
                 {
-                    // Log($"[GetHistoricalReturnsMatrix] Missing historical data for {symbol.Value}. Skipping this symbol.");
+                    algorithm.Log($"[GetHistoricalReturnsMatrix] Missing historical data for {symbol.Value}. Skipping this symbol.");
                     continue;
                 }
 
                 var closePrices = history[symbol];
                 if (closePrices.Count < shortLookback)
                 {
-                    Log($"[GetHistoricalReturnsMatrix] Insufficient historical data for {symbol.Value}. Required: {shortLookback}, Available: {closePrices.Count}. Skipping this symbol.");
+                    algorithm.Log($"[GetHistoricalReturnsMatrix] Insufficient historical data for {symbol.Value}. Required: {shortLookback}, Available: {closePrices.Count}. Skipping this symbol.");
                     continue;
                 }
 
@@ -247,7 +326,7 @@ namespace QuantConnect
 
             if (nAssets == 0)
             {
-                Log("[GetHistoricalReturnsMatrix] No valid symbols with sufficient historical data. Returning empty matrix.");
+                algorithm.Log("[GetHistoricalReturnsMatrix] No valid symbols with sufficient historical data. Returning empty matrix.");
                 return (new double[0, 0], validSymbols);
             }
 
