@@ -81,6 +81,7 @@ namespace QuantConnect.Algorithm.CSharp
      *     // Set up Requested Data, Cash, Time Period.
      *     public virtual void Initialize()
      *
+     *     // Doc: https://www.quantconnect.com/docs/v2/writing-algorithms/key-concepts/event-handlers
      *     // Event Handlers: (Frequently Used)
      *     public virtual void OnData(Slice slice)
      *     public virtual void OnSecuritiesChanged(SecurityChanges changes)
@@ -95,8 +96,9 @@ namespace QuantConnect.Algorithm.CSharp
      *     public virtual void OnSymbolChangedEvents(SymbolChangedEvents symbolsChanged)
      *     public virtual void OnMarginCall(List<SubmitOrderRequest> requests)
      *     public virtual void OnMarginCallWarning()
+     *     // Recommend: not to place orders in the OnOrderEvent to avoid infinite loops
      *     public virtual void OnOrderEvent(OrderEvent orderEvent) // Async, requires locks for thread safety
-     *     public virtual void OnAssignmentOrderEvent(OrderEvent assignmentEvent) // Async, requires locks for thread safety
+     *     public virtual void OnAssignmentOrderEvent(OrderEvent assignmentEvent) // Async, requires locks for thread safety, for options assignment events
      *     public virtual void OnBrokerageMessage(BrokerageMessageEvent messageEvent)
      *     public virtual void OnBrokerageDisconnect()
      *     public virtual void OnBrokerageReconnect()
@@ -146,71 +148,7 @@ namespace QuantConnect.Algorithm.CSharp
         }
         public override void Initialize()
         {
-            // Set Dates (will be ignored in live mode)
-            SetStartDate(2019, 3, 1);
-            // SetStartDate(2019, 3, 1);
-            // SetStartDate(2024, 1, 1);
-            SetEndDate(2024, 8, 1);
-
-            // Set Account Currency
-            // - Default is USD $100,000
-            // - Must be done before SetCash()
-            // SetAccountCurrency("USD");
-            // SetAccountCurrency("BTC", 10);
-            //
-            // Question: How to set multiple currencies? Like, the mix of USD and BTC
-            // Answer: No, you cannot set multiple account currency and you can only set it once. Its internal valule is used for all calculations.
-            // Reference: https://www.quantconnect.com/docs/v2/writing-algorithms/portfolio/cashbook#02-Account-Currency
-
-            // Set Cash
-            // SetCash("BTC", 10);
-            SetCash(InitialCash);
-
-            // Set Universe Settings
-            UniverseSettings.Resolution = Resolution.Daily;
-            // UniverseSettings.Asynchronous = true; // TODO: This would cause backtest consistency issues
-            // UniverseSettings.ExtendedMarketHours = true; // only set to true if you are performing intraday trading
-            // AddUniverseSelection(new FundamentalUniverseSelectionModel(Select, UniverseSettings));
-            // AddUniverse(CoarseSelectionFunction);
-            // AddUniverse(CoarseSelectionFunction, FineSelectionFunction);
-            // TODO: Multi-universe? But the members are only for certain unvierse, but the active securities are for all universes
-            // UniverseManager[_universe.Configuration.Symbol].Members:
-            // Universe.Members: When you remove an asset from a universe, LEAN usually removes the security from the Members collection and removes the security subscription.
-            // Question: question here, why `Members` exactly the same as `ActiveSecurities`?
-            // Answer: ActiveSecurities is a collection of all Members from all universes.
-            // TODO: what is the Symbol of a universe? Where is it defined?
-            // ActiveSecurities: When you remove an asset from a universe, LEAN usually removes the security from the ActiveSecurities collection and removes the security subscription.
-            // Note: both `UniverseManager` and `ActiveSecurities` are properties of the `QCAlgorithm` class
-            // To have access to all securities without considering the active or not, use `Securities` property
-            // - There are still cases where the Securities may remove the security, but only from the primary collection (Securities.Values), and can still be accessed from Securities.Total
-            //
-            // Universe.Selected: Different from Members, Members contains more assets
-            // Diffs Remarks:
-            //   This set might be different than QuantConnect.Data.UniverseSelection.Universe.Securities
-            //   which might hold members that are no longer selected but have not been removed
-            //   yet, this can be because they have some open position, orders, haven't completed
-            //   the minimum time in universe
-
-
-            // Set Security Initializer
-            // - This allow any custom security-level settings, instead of using the global universe settings
-            // - SetSecurityInitializer(security => security.SetFeeModel(new ConstantFeeModel(0, "USD")));
-            // - SetSecurityInitializer(new MySecurityInitializer(BrokerageModel, new FuncSecuritySeeder(GetLastKnownPrices)));
-            SetSecurityInitializer(new BrokerageModelSecurityInitializer(
-                this.BrokerageModel, new FuncSecuritySeeder(this.GetLastKnownPrices)
-            ));
-
-            // Set Warmup Period
-            // SetWarmUp(PLookback/2, Resolution.Daily);
-
-            // OnWarmupFinished() is the last method called before the algorithm starts running
-            // - You can notify yourself by overriding this method: public override void OnWarmupFinished() { Log("Algorithm Ready"); }
-            // - You can train machine learning models here: public override void OnWarmupFinished() { Train(MyTrainingMethod); }
-            // The OnWarmupFinished() will be called after the warmup period even if the warmup period is not set
-
-            // PostInitialize() method should never be overridden because it is used for predefined post-initialization routines
-
-            // Customized Initialization
+            /*** Start Customized Initialization ***/
             this._momp = new Dictionary<Symbol, MomentumPercent>();
             this._lookback = PLookback;
             this._numCoarse = PNumCoarse;
@@ -223,33 +161,83 @@ namespace QuantConnect.Algorithm.CSharp
             this._shortLookback = PShortLookback;
             this.firstTradeDate = null;
             this.nextAdjustmentDate = null;
-            SetUniverseSelection(new MomentumUniverseSelectionModel(this, this._lookback, this._numCoarse, this._numFine, this._numLong, this.adjustmentStep, this._shortLookback));
-            // SetPortfolioConstruction(new MinimumVariancePortfolioConstructionModel());
-            // SetExecution(new ImmediateExecutionModel());
-        }
-        // public IEnumerable<Symbol> CoarseSelectionFunction(IEnumerable<CoarseFundamental> coarse)
-        // {
-        //     if (this.nextAdjustmentDate != null && Time < this.nextAdjustmentDate)
-        //     {
-        //         return Universe.Unchanged;
-        //     }
-        //     this._rebalance = true;
-        //     if (this.firstTradeDate == null)
-        //     {
-        //         this.firstTradeDate = Time;
-        //         this.nextAdjustmentDate = GetNextAdjustmentDate(Time);
-        //         this._rebalance = true;
-        //     }
-        //     var selected = coarse.Where(x => x.HasFundamentalData && x.Price > 5)
-        //         .OrderByDescending(x => x.DollarVolume).Take(this._numCoarse);
-        //     return selected.Select(x => x.Symbol);
-        // }
-        // public IEnumerable<Symbol> FineSelectionFunction(IEnumerable<FineFundamental> fine)
-        // {
-        //     var selected = fine.OrderByDescending(f => f.MarketCap).Take(this._numFine);
-        //     return selected.Select(x => x.Symbol);
-        // }
+            /***  End Customized Initialization  ***/
 
+            /*** Start Default Initialization ***/
+            // Set Dates (will be ignored in live mode)
+            SetStartDate(2019, 3, 1);
+            SetEndDate(2024, 8, 1);
+
+            // Set Account Currency
+            // - Default is USD $100,000
+            // - Must be done before SetCash()
+            // SetAccountCurrency("USD");
+            // SetAccountCurrency("BTC", 10);
+            //
+            // Question: How to set multiple currencies? For example, if you want to use a mix of USD and BTC
+            // Answer: No, you cannot set multiple account currency and you can only set it once. Its internal valule is used for all calculations.
+            // Reference: https://www.quantconnect.com/docs/v2/writing-algorithms/portfolio/cashbook#02-Account-Currency
+
+            // Set Cash
+            // SetCash("BTC", 10);
+            SetCash(InitialCash);
+            /***  End Default Initialization  ***/
+
+            /*** Start Algorithm Framework ***/
+            // Set Universe Settings
+            UniverseSettings.Resolution = Resolution.Daily;
+            // UniverseSettings.Asynchronous = true; // This would cause backtest consistency issues, see: https://www.quantconnect.com/docs/v2/writing-algorithms/algorithm-framework/universe-selection/universe-settings#09-Asynchronous-Selection
+            // UniverseSettings.ExtendedMarketHours = true; // only set to true if you are performing intraday trading
+            // AddUniverseSelection(new FundamentalUniverseSelectionModel(Select, UniverseSettings));
+
+            // Docs:
+            // Universe.Members: When you remove an asset from a universe, LEAN usually removes the security from the Members collection and removes the security subscription.
+            // ActiveSecurities: When you remove an asset from a universe, LEAN usually removes the security from the ActiveSecurities collection and removes the security subscription.
+            //
+            // Question: What's the differences between `Universe.Members` and `Universe.ActiveSecurities`?
+            // Answer: `ActiveSecurities` is a collection of all `Members` from all universes.
+
+            // UniverseManager[_universe.Configuration.Symbol].Members:
+            // TODO: Multiple universes are allowed? But the members are only for certain unvierse, but the active securities are for all universes
+            // TODO: what is the Symbol of a universe? Where is it defined?
+            // Note: both `UniverseManager` and `ActiveSecurities` are properties of the `QCAlgorithm` class
+            // To have access to all securities without considering they are activthee or not, use `Securities` property
+            // - There are still cases where the Securities may remove the security, but only from the primary collection (Securities.Values), and can still be accessed from Securities.Total
+            //
+            // Universe.Selected: Different from Members, Members may contain more assets
+            // Diffs Remarks:
+            //   This set might be different than QuantConnect.Data.UniverseSelection.Universe.Securities
+            //   which might hold members that are no longer selected but have not been removed
+            //   yet, this can be because they have some open position, orders, haven't completed
+            //   the minimum time in universe
+
+            // Set Security Initializer
+            // - This allow any custom security-level settings, instead of using the global universe settings
+            // - SetSecurityInitializer(security => security.SetFeeModel(new ConstantFeeModel(0, "USD")));
+            // - SetSecurityInitializer(new MySecurityInitializer(BrokerageModel, new FuncSecuritySeeder(GetLastKnownPrices)));
+            SetSecurityInitializer(new BrokerageModelSecurityInitializer(
+                this.BrokerageModel, new FuncSecuritySeeder(this.GetLastKnownPrices)
+            ));
+            // Set Selection
+            SetUniverseSelection(new MomentumUniverseSelectionModel(this, this._lookback, this._numCoarse, this._numFine, this._numLong, this.adjustmentStep, this._shortLookback));
+            // Set Alphas
+            // Set Portfolio
+            // SetPortfolioConstruction(new MinimumVariancePortfolioConstructionModel());
+            // Set Risk 
+            // Set Execution
+            SetExecution(new ImmediateExecutionModel());
+            /***  End Algorithm Framework  ***/
+
+            // Set Warmup Period
+            // SetWarmUp(PLookback/2, Resolution.Daily);
+
+            // OnWarmupFinished() is the last method called before the algorithm starts running
+            // - You can notify yourself by overriding this method: public override void OnWarmupFinished() { Log("Algorithm Ready"); }
+            // - You can train machine learning models here: public override void OnWarmupFinished() { Train(MyTrainingMethod); }
+            // The OnWarmupFinished() will be called after the warmup period even if the warmup period is not set
+
+            // PostInitialize() method should never be overridden because it is used for predefined post-initialization routines
+        }
         public override void OnWarmupFinished()
         {
             Log("Algorithm Ready");
@@ -281,6 +269,16 @@ namespace QuantConnect.Algorithm.CSharp
         }
         public override void OnData(Slice slice)
         {
+            // Log($"OnData: {Time}, {slice.Keys.Count} symbols, {slice.Bars.Count} bars");
+            // The suggested way of handling the time-based event is using the Scheduled Events 
+            // instead of checking the time in the OnData method
+            // Source: https://www.quantconnect.com/docs/v2/writing-algorithms/scheduled-events
+            /*
+              Scheduled Events let you trigger code to run at specific times of day, regardless of
+              your algorithm's data subscriptions. It's easier and more reliable to execute
+              time-based events with Scheduled Events than checking the current algorithm time in
+              the OnData event handler.
+            */
             foreach (var kvp in this._momp)
             {
                 kvp.Value.Update(Time, Securities[kvp.Key].Close);
