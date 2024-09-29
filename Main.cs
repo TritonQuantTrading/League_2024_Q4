@@ -207,7 +207,7 @@ namespace QuantConnect.Algorithm.CSharp
             // Set Alphas
             SetAlpha(new TempAlphaModel());
             // Set Portfolio
-            SetPortfolioConstruction(new MomentumPortfolioConstructionModel(PLookback, PShortLookback, PNumLong, PAdjustmentStep, PRandSeed));
+            SetPortfolioConstruction(new MomentumPortfolioConstructionModel(PLookback, PShortLookback, PNumLong, PAdjustmentStep, PNPortfolios, PRandSeed));
             // Set Risk 
             // Set Execution
             SetExecution(new ImmediateExecutionModel());
@@ -280,38 +280,6 @@ namespace QuantConnect.Algorithm.CSharp
 
         public override void OnSecuritiesChanged(SecurityChanges changes)
         {
-            foreach (var symbol in changes.RemovedSecurities.Select(security => security.Symbol))
-            {
-                if (this._momp.Remove(symbol, out var _))
-                {
-                    Liquidate(symbol, "Removed from universe");
-                }
-            }
-
-            foreach (var symbol in changes.AddedSecurities.Select(security => security.Symbol))
-            {
-                if (!this._momp.ContainsKey(symbol))
-                {
-                    this._momp[symbol] = new MomentumPercent(this._lookback);
-                }
-            }
-
-            var addedSymbols = (from kvp in this._momp
-                                where !kvp.Value.IsReady
-                                select kvp.Key).ToList();
-            var history = History(addedSymbols, 1 + this._lookback, Resolution.Daily); // iterable of slices
-            foreach (var symbol in addedSymbols)
-            {
-                var symbolHistory = history.Where(slice => slice.Bars.ContainsKey(symbol));
-                foreach (var slice in symbolHistory)
-                {
-                    var time = slice.Time;
-                    var value = slice.Bars[symbol].Close;
-                    var item = new IndicatorDataPoint(symbol, time, value);
-                    this._momp[symbol].Update(item);
-                }
-            }
-
             // Log the changes
             var currentDate = Time.ToString(DateFormat);
             foreach (var universe in UniverseManager.Values)
@@ -365,102 +333,5 @@ namespace QuantConnect.Algorithm.CSharp
             Log($"{currentDate}: Holdings[{sumOfAllHoldings:F2}%]: [{holdingsStr}]");
         }
 
-        public List<decimal> OptimizePortfolio(List<Symbol> selectedSymbols)
-        {
-            // historical returns matrix and symbols
-            var (historicalReturns, validSymbols) = GetHistoricalReturnsMatrix(selectedSymbols);
-
-            int nAssets = validSymbols.Count;
-            if (nAssets == 0 || historicalReturns.GetLength(0) == 0)
-            {
-                Log("[OptimizePortfolio] No valid symbols with sufficient historical data. Returning empty weights.");
-                return new List<decimal>();
-            }
-
-            // Portfolio Optimizers: [5 years] awesome (>= 300), good (>= 200), medium (>= 100), ordinary (< 100)
-            var optimizer= new SortinoEfficientFrontierOptimizer(PNPortfolios, this._shortLookback, PRandSeed); // awesome
-            // var optimizer = new QuadraticProgrammingPortfolioOptimizer(this._shortLookback); // medium
-            // var optimizer = new SOCPortfolioOptimizer(); // ordinary
-            // var optimizer = new MaximumSharpeRatioPortfolioOptimizer(0, 1, 0.01); // medium
-            // var optimizer = new MinimumVariancePortfolioOptimizer(); // good
-            // var optimizer = new UnconstrainedMeanVariancePortfolioOptimizer(); // medium, but very unstable
-            // var optimizer = new RiskParityPortfolioOptimizer(); // good
-            var optimizedWeights = optimizer.Optimize(historicalReturns);
-
-            // logging
-            var symbolWeights = new Dictionary<Symbol, decimal>();
-            for (int i = 0; i < nAssets; i++)
-            {
-                symbolWeights[validSymbols[i]] = (decimal)optimizedWeights[i];
-            }
-            var weightsStr = string.Join(", ", symbolWeights.OrderByDescending(kvp => kvp.Value).Select(kvp => $"{kvp.Key.Value}: {kvp.Value * 100:F2}%"));
-            Log($"[OptimizePortfolio] Optimized Weights: {weightsStr}");
-
-            return optimizedWeights.Select(w => (decimal)w).ToList();
-        }
-
-        private (double[,] historicalReturns, List<Symbol> validSymbols) GetHistoricalReturnsMatrix(List<Symbol> selectedSymbols)
-        {
-            var shortLookback = this._shortLookback;
-
-            var historySlices = History(selectedSymbols, shortLookback, Resolution.Daily);
-
-            var history = historySlices
-                .SelectMany(slice => slice.Bars)
-                .GroupBy(bar => bar.Key)
-                .ToDictionary(
-                    group => group.Key,
-                    group => group.Select(g => (double)g.Value.Close).ToList()
-                );
-
-            var validSymbols = new List<Symbol>();
-            var returnsList = new List<List<double>>();
-
-            foreach (var symbol in selectedSymbols)
-            {
-                if (!history.ContainsKey(symbol))
-                {
-                    Log($"[GetHistoricalReturnsMatrix] Missing historical data for {symbol.Value}. Skipping this symbol.");
-                    continue;
-                }
-
-                var closePrices = history[symbol];
-                if (closePrices.Count < shortLookback)
-                {
-                    Log($"[GetHistoricalReturnsMatrix] Insufficient historical data for {symbol.Value}. Required: {shortLookback}, Available: {closePrices.Count}. Skipping this symbol.");
-                    continue;
-                }
-
-                var returns = closePrices
-                    .Select((price, index) => index == 0 ? 0.0 : (price - closePrices[index - 1]) / closePrices[index - 1])
-                    .Skip(1) // Skip the first return as it's zero
-                    .ToList();
-
-                validSymbols.Add(symbol);
-                returnsList.Add(returns);
-            }
-
-            int nAssets = validSymbols.Count;
-
-            if (nAssets == 0)
-            {
-                Log("[GetHistoricalReturnsMatrix] No valid symbols with sufficient historical data. Returning empty matrix.");
-                return (new double[0, 0], validSymbols);
-            }
-
-            int nObservations = returnsList[0].Count; // Assuming all assets have the same number of observations
-            var historicalReturns = new double[nObservations, nAssets];
-
-            for (int i = 0; i < nAssets; i++)
-            {
-                var returns = returnsList[i];
-                for (int j = 0; j < nObservations; j++)
-                {
-                    historicalReturns[j, i] = returns[j];
-                }
-            }
-
-            return (historicalReturns, validSymbols);
-        }
     }
 }
