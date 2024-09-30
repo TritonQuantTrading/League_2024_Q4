@@ -183,9 +183,18 @@ namespace QuantConnect.Algorithm.CSharp
                 this.BrokerageModel, new FuncSecuritySeeder(this.GetLastKnownPrices)
             ));
             // Set Selection
-            SetUniverseSelection(new BasicUniverseSelectionModel());
+            AddUniverseSelection(new BasicUniverseSelectionModel());
+            // var _optionFilter = new Func<OptionFilterUniverse, OptionFilterUniverse>(universe =>
+            // {
+            //     return universe
+            //         .Strikes(-10, -10)
+            //         .Expiration(TimeSpan.FromDays(45), TimeSpan.FromDays(60));
+            // });
+            // AddUniverseSelection(new DerivedOptionsUniverseSelectionModel(
+            //     new BasicUniverseSelectionModel(), _optionFilter
+            // )); // Don't need to add the basic universe selection model in advance since it is handled internally
             // Set Alphas
-            SetAlpha(new TempAlphaModel());
+            AddAlpha(new TempAlphaModel());
             // Set Portfolio
             Settings.RebalancePortfolioOnInsightChanges = false;
             Settings.RebalancePortfolioOnSecurityChanges = false;
@@ -206,10 +215,10 @@ namespace QuantConnect.Algorithm.CSharp
             // The OnWarmupFinished() will be called after the warmup period even if the warmup period is not set
             Log("Algorithm Ready");
             // show universities
-            foreach (var universe in UniverseManager.Values)
-            {
-                Log($"Init Universe: {universe.Configuration.Symbol}: {universe.Members.Count} members");
-            }
+            // foreach (var universe in UniverseManager.Values)
+            // {
+            //     Log($"Init Universe: {universe.Configuration.Symbol}: {universe.Members.Count} members");
+            // }
             // PostInitialize() method should never be overridden because it is used for predefined post-initialization routines
         }
 

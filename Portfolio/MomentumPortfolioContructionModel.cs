@@ -209,9 +209,14 @@ namespace QuantConnect
 
             foreach (var symbol in changes.AddedSecurities.Select(security => security.Symbol))
             {
-                if (!this._momp.ContainsKey(symbol))
+                if (!this._momp.ContainsKey(symbol) && symbol.SecurityType == SecurityType.Equity)
                 {
                     this._momp[symbol] = new MomentumPercent(this._lookback);
+                }else {
+                    if (symbol.SecurityType != SecurityType.Equity)
+                    {
+                        algorithm.Log($"[OnSecuritiesChanged] {symbol.Value} is not an equity security. Skipping.");
+                    }
                 }
             }
             var addedSymbols = (from kvp in this._momp
