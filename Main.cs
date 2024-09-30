@@ -95,6 +95,33 @@ namespace QuantConnect.Algorithm.CSharp
             (new DateTime(1999, 1, 1), new DateTime(2024, 6, 1)), //[14] 25 years
             (new DateTime(1998, 1, 1), new DateTime(2016, 6, 1)), //[15] 18 years  (1999-11-28 => 2003-02-28, -66.10%) (2007-07-12 => 2009-03-12, -61.17%)
         };
+        /* Events Identified:
+         1. 2020-01-20 to 2020-04-04 (-41.33%)
+            *COVID-19 Pandemic*
+            - This period corresponds to the global stock market crash caused by the COVID-19 pandemic.
+            Beginning in late January 2020, as the virus spread and lockdown measures were enforced globally, 
+            the financial markets experienced extreme volatility. The S&P 500 and other major indexes saw 
+            sharp declines, with March 2020 being particularly devastating. Central banks responded with 
+            aggressive monetary policy measures, which helped stabilize markets in the second quarter of 2020.
+
+         2. 1999-11-28 to 2003-02-28 (-66.10%)
+            *Dot-Com Bubble Burst*
+            The period from late 1999 to early 2003 marks the collapse of the dot-com bubble.
+            - Many technology stocks were vastly overvalued in the late 1990s, fueled by speculative investments 
+            in internet-based companies. The bubble burst in early 2000, and stock prices for technology companies
+            plummeted. The NASDAQ Composite Index, which included many of these companies, lost nearly 78% of its 
+            value from its peak in March 2000 to its trough in October 2002. The crash was compounded by economic 
+            slowdowns and the 9/11 attacks in 2001.
+
+         3. 2007-07-12 to 2009-03-12 (-61.17%)
+            *Global Financial Crisis (GFC)*
+            This period corresponds to the global financial crisis, which began in mid-2007 and reached
+            its peak in late 2008 and early 2009.
+            - The collapse of major financial institutions, the bursting of the U.S. housing bubble, and the resulting
+            credit crisis led to a severe global recession. Stock markets around the world saw dramatic declines, 
+            with the S&P 500 losing more than half its value from October 2007 to March 2009. Central banks and 
+            governments worldwide implemented massive stimulus packages to prevent further economic collapse.
+        */
         public const int PeriodIndex = 0;
         public override void Initialize()
         
