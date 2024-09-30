@@ -195,10 +195,13 @@ namespace QuantConnect.Algorithm.CSharp
             //     new BasicUniverseSelectionModel(), _optionFilter
             // )); // Don't need to add the basic universe selection model in advance since it is handled internally
             // Set Alphas
+            // TODO: MomentumAlphaModel
+            // TODO: ProtectivePutAlphaModel
             AddAlpha(new TempAlphaModel());
             // Set Portfolio
             Settings.RebalancePortfolioOnInsightChanges = false;
             Settings.RebalancePortfolioOnSecurityChanges = false;
+            // TODO: SortinoEfficientFrontierPortfolioConstructionModel
             SetPortfolioConstruction(new MomentumPortfolioConstructionModel());
             // Set Risk 
             // Set Execution
