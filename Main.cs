@@ -76,12 +76,33 @@ namespace QuantConnect.Algorithm.CSharp
         // Public fields
         public const string DateFormat = "yyyy-MM-dd HH:mm:ss";
         public const decimal InitialCash = 1_000_000;
+        public readonly (DateTime, DateTime)[] TestPeriods = new[]
+        {                                                         //[i]  [N] years (start => end, drawdown < -20%)
+            (new DateTime(2019, 1, 1), new DateTime(2024, 6, 1)), //[0]  5 years   (2020-01-20 => 2020-04-04, -41.33%)
+            (new DateTime(2014, 1, 1), new DateTime(2024, 6, 1)), //[1]  10 years  (2020-01-20 => 2020-04-04, -41.33%)
+            (new DateTime(2014, 1, 1), new DateTime(2019, 6, 1)), //[2]  5 years
+            (new DateTime(2009, 1, 1), new DateTime(2014, 6, 1)), //[3]  5 years   (2010-03-16 => 2012-01-31, -27.54%)
+            (new DateTime(2004, 1, 1), new DateTime(2009, 6, 1)), //[4]  5 years   (2007-07-28 => 2009-07-07, -78.28%)
+            (new DateTime(1999, 1, 1), new DateTime(2004, 6, 1)), //[5]  5 years   (1999-03-01 => 2003-03-13, -59.88%)
+            (new DateTime(1999, 1, 1), new DateTime(2009, 6, 1)), //[6]  10 years
+            (new DateTime(2004, 1, 1), new DateTime(2014, 6, 1)), //[7]  10 years
+            (new DateTime(2009, 1, 1), new DateTime(2019, 6, 1)), //[8]  10 years
+            (new DateTime(1999, 1, 1), new DateTime(2014, 6, 1)), //[9]  15 years
+            (new DateTime(2004, 1, 1), new DateTime(2019, 6, 1)), //[10] 15 years
+            (new DateTime(2009, 1, 1), new DateTime(2024, 6, 1)), //[11] 15 years
+            (new DateTime(1999, 1, 1), new DateTime(2019, 6, 1)), //[12] 20 years
+            (new DateTime(2004, 1, 1), new DateTime(2024, 6, 1)), //[13] 20 years
+            (new DateTime(1999, 1, 1), new DateTime(2024, 6, 1)), //[14] 25 years
+            (new DateTime(1998, 1, 1), new DateTime(2016, 6, 1)), //[15] 18 years  (1999-11-28 => 2003-02-28, -66.10%) (2007-07-12 => 2009-03-12, -61.17%)
+        };
+        public const int PeriodIndex = 0;
         public override void Initialize()
+        
         {
             /*************** Start Default Initialization *****************/
             // Set Dates (will be ignored in live mode)
-            SetStartDate(2019, 3, 1);
-            SetEndDate(2024, 8, 1);
+            SetStartDate(TestPeriods[PeriodIndex].Item1);
+            SetEndDate(TestPeriods[PeriodIndex].Item2);
 
             // Set Account Currency
             // - Default is USD $100,000
