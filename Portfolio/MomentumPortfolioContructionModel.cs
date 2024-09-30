@@ -75,7 +75,7 @@ namespace QuantConnect
         public const int PNumLong = 5;
         public const decimal PAdjustmentStep = 1.0m;
         public const int PNPortfolios = 1000;
-        public const int PRandSeed = 11; // 18, 2, 4, 10, 11
+        public const int PRandSeed = 97; // 97, 18, 23, 
         // readonly properties
         private readonly int _lookback;
         private readonly int _shortLookback;
@@ -149,7 +149,9 @@ namespace QuantConnect
                 var symbol = kvp.Key;
                 var weight = kvp.Value;
                 var quantity = algorithm.CalculateOrderQuantity(symbol, weight);
-                var target = new PortfolioTarget(symbol, quantity);
+                var currentQuantity = algorithm.Portfolio[symbol].Quantity; 
+                var targetQuantity = quantity + currentQuantity;
+                var target = new PortfolioTarget(symbol, targetQuantity);
                 targets.Add(target);
             }
             return targets.Cast<PortfolioTarget>().ToList();
@@ -197,7 +199,6 @@ namespace QuantConnect
         public override void OnSecuritiesChanged(QCAlgorithm algorithm, SecurityChanges changes)
         {
             // base.OnSecuritiesChanged(algorithm, changes);
-
             foreach (var symbol in changes.RemovedSecurities.Select(security => security.Symbol))
             {
                 if (this._momp.Remove(symbol, out var _))
