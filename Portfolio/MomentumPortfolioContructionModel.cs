@@ -115,6 +115,16 @@ namespace QuantConnect
         // Create list of PortfolioTarget objects from Insights.
         public override List<PortfolioTarget> CreateTargets(QCAlgorithm algorithm, Insight[] insights)
         {
+            foreach (var insight in insights)
+            {
+                // log the insight
+                var symbol = insight.Symbol;
+                var direction = insight.Direction;
+                var magnitude = insight.Magnitude;
+                var confidence = insight.Confidence;
+                var time = algorithm.UtcTime;
+                algorithm.Log($"[CreateTargets] {time}: {symbol.Value} - {direction} ({magnitude:F2}, {confidence:F2})");
+            }
             foreach (var kvp in this._momp)
             {
                 kvp.Value.Update(algorithm.Time, algorithm.Securities[kvp.Key].Close);
