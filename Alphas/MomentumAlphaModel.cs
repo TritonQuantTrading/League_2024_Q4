@@ -80,14 +80,14 @@ namespace QuantConnect
 
         // Symbol-specific data
         private readonly Dictionary<Symbol, SymbolData> _symbolDataDict;
-
+        private DateTime _lastRebalanceTime;
         public MomentumAlphaModel(int lookback = PLongLookback, int numLong = PNumLong, int numShort = PNumShort, Resolution resolution = PResolution)
         {
             _lookback = lookback;
             _numLong = numLong;
             _numShort = numShort;
             _resolution = resolution;
-            _predictionInterval = resolution.ToTimeSpan().Multiply(_lookback);
+            _predictionInterval = resolution.ToTimeSpan();
 
             _symbolDataDict = new Dictionary<Symbol, SymbolData>();
             Name = $"{nameof(MomentumAlphaModel)}({_lookback},{_numLong},{_numShort},{_resolution})";
@@ -95,7 +95,17 @@ namespace QuantConnect
 
         public override IEnumerable<Insight> Update(QCAlgorithm algorithm, Slice data)
         {
+            foreach (var kvp in _symbolDataDict)
+            {
+                var symbol = kvp.Key;
+                var symbolData = kvp.Value;
+                symbolData.MOMP.Update(algorithm.Time, algorithm.Securities[symbol].Close);
+            }
             var insights = new List<Insight>();
+            if (!IsRebalanceDue(algorithm.UtcTime))
+            {
+                return insights;
+            }
 
             // Rank symbols based on _momp
             var rankedSymbols = _symbolDataDict
@@ -108,28 +118,36 @@ namespace QuantConnect
             var topShorts = rankedSymbols.TakeLast(_numShort).Select(kvp => kvp.Key).ToList();
 
             // Generate long insights
-            // foreach (var symbol in topLongs)
-            var longSum = (topLongs.Count * (topLongs.Count + 1)) / 2;
-            for (int i = 0; i < topLongs.Count; i++)
+            foreach (var symbol in topLongs)
             {
-                var symbol = topLongs[i];
-                var magnitude = (topLongs.Count - i) / (double)longSum;
+                var magnitude = (double)_symbolDataDict[symbol].MOMP.Current.Value;
                 insights.Add(Insight.Price(symbol, _predictionInterval, InsightDirection.Up, magnitude));
             }
 
             // Generate short insights
-            // foreach (var symbol in topShorts)
-            var shortSum = (topShorts.Count * (topShorts.Count + 1)) / 2;
-            for (int i = 0; i < topShorts.Count; i++)
+            foreach (var symbol in topShorts)
             {
-                var symbol = topShorts[i];
-                var magnitude = (i + 1) / (double)shortSum;
+                var magnitude = (double)_symbolDataDict[symbol].MOMP.Current.Value;
                 insights.Add(Insight.Price(symbol, _predictionInterval, InsightDirection.Down, magnitude));
             }
 
             return insights;
         }
 
+        private bool IsRebalanceDue(DateTime algorithmUtc)
+        {
+            if (_lastRebalanceTime == default(DateTime))
+            {
+                _lastRebalanceTime = algorithmUtc;
+                return true;
+            }
+            if (algorithmUtc.Month != _lastRebalanceTime.Month)
+            {
+                _lastRebalanceTime = algorithmUtc;
+                return true;
+            }
+            return false;
+        }
         public override void OnSecuritiesChanged(QCAlgorithm algorithm, SecurityChanges changes)
         {
             // Handle removed securities
@@ -147,8 +165,9 @@ namespace QuantConnect
             {
                 if (!_symbolDataDict.ContainsKey(added.Symbol) && added.Symbol.SecurityType == SecurityType.Equity)
                 {
-                    var symbolData = new SymbolData(algorithm, added.Symbol, _lookback, _resolution);
+                    var symbolData = new SymbolData(algorithm, added.Symbol,  _lookback, _resolution);
                     _symbolDataDict[added.Symbol] = symbolData;
+                    algorithm.Log($"[MomentumAlphaModel] Added {added.Symbol.Value}: {symbolData.MOMP.Current.Value}");
                 }
                 else
                 {
@@ -168,7 +187,7 @@ namespace QuantConnect
             private readonly MomentumPercent _momp;
             private readonly Security _security;
 
-
+            public Security Security => _security;
             public Symbol Symbol => _security.Symbol;
 
             public MomentumPercent MOMP => _momp;

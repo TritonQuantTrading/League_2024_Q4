@@ -60,6 +60,7 @@ using Ionic.Zip;
 using QuantConnect.Algorithm.Framework.Alphas.Analysis;
 using Accord;
 using QLNet;
+using Accord.Math;
 #endregion
 
 namespace QuantConnect
@@ -128,7 +129,7 @@ namespace QuantConnect
                 return targets.Cast<PortfolioTarget>().ToList();
             }
             string logMessage = $"{algorithm.Time.ToString(DateFormat)}: Insight Holdings: [";
-            foreach (var insight in insights)
+            foreach (var insight in insights.OrderByDescending(i => i.Magnitude).ThenBy(i => i.Direction))
             {
                 // log the insight
                 var symbol = insight.Symbol;
@@ -136,14 +137,14 @@ namespace QuantConnect
                 var magnitude = insight.Magnitude;
                 logMessage += $"({symbol.Value}: {direction}{magnitude:F2}); ";
             }
-            logMessage += "]";
+            // logMessage += "]";
             algorithm.Log(logMessage);
             var sortedMom = (from kvp in this._momp
                              where kvp.Value.IsReady
                              orderby kvp.Value.Current.Value descending
                              select kvp.Key).ToList();
             var selected = sortedMom.Take(this._numLong).ToList();
-            string selectedStr = string.Join(", ", selected.Select(s => s.Value));
+            string selectedStr = string.Join(", ", selected.Select(symbol => $"{symbol.Value}: {this._momp[symbol].Current.Value:F2}"));
             algorithm.Log($"{algorithm.Time.ToString(DateFormat)}: Selected Symbols: [{selectedStr}]");
             var newHoldings = new HashSet<Symbol>(selected);
 
@@ -226,6 +227,7 @@ namespace QuantConnect
                 if (!this._momp.ContainsKey(symbol) && symbol.SecurityType == SecurityType.Equity)
                 {
                     this._momp[symbol] = new MomentumPercent(this._lookback);
+                    algorithm.Log($"[MomentumPortfolioConstructionModel] Added {symbol.Value}: {this._momp[symbol].Current.Value}");
                 }
                 else
                 {
@@ -319,14 +321,6 @@ namespace QuantConnect
             var optimizer = this._optimizer;
             var optimizedWeights = optimizer.Optimize(historicalReturns);
 
-            // logging
-            var symbolWeights = new Dictionary<Symbol, decimal>();
-            for (int i = 0; i < nAssets; i++)
-            {
-                symbolWeights[validSymbols[i]] = (decimal)optimizedWeights[i];
-            }
-            var weightsStr = string.Join(", ", symbolWeights.OrderByDescending(kvp => kvp.Value).Select(kvp => $"{kvp.Key.Value}: {kvp.Value * 100:F2}%"));
-            algorithm.Log($"[OptimizePortfolio] Optimized Weights: {weightsStr}");
             return optimizedWeights.Select(w => (decimal)w).ToList();
         }
 

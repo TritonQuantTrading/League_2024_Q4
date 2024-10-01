@@ -73,7 +73,7 @@ namespace QuantConnect
         public const int PShortLookback = 63;
         public const decimal PAdjustmentStep = 1.0m;
         public const int PNPortfolios = 1000;
-        public const int PRandSeed = 97; // 97, 18, 23, 
+        public const int PRandSeed = 8; // 97, 18, 23, 
         // readonly properties
         private readonly int _shortLookback;
         private readonly decimal _adjustmentStep;
@@ -108,23 +108,30 @@ namespace QuantConnect
         {
 
             var targets = new List<IPortfolioTarget>();
-
             if (!IsRebalanceDue(algorithm.UtcTime))
             {
                 return targets.Cast<PortfolioTarget>().ToList();
             }
+            var expiredInsights = algorithm.Insights.RemoveExpiredInsights(algorithm.UtcTime);
+            var count = expiredInsights.Count();
+            if (count > 0)
+            {
+                algorithm.Log($"{algorithm.Time.ToString(DateFormat)}: Expired Insights: {count}");
+            }
+            var activeInsights = insights; // TODO: check if all insights passed in are active
+
             string logMessage = $"{algorithm.Time.ToString(DateFormat)}: Insight Holdings: [";
-            foreach (var insight in insights)
+            foreach (var insight in activeInsights)
             {
                 // log the insight
                 var symbol = insight.Symbol;
                 var direction = insight.Direction == InsightDirection.Up ? "^" : "v";
                 var magnitude = insight.Magnitude;
-                logMessage += $"({symbol.Value}: {direction}{magnitude:F2}); ";
+                logMessage += $"({symbol.Value}: {direction}{magnitude:F2}, {insight.IsActive(algorithm.Time)}); ";
             }
             logMessage += "]";
             algorithm.Log(logMessage);
-            var selected = insights
+            var selected = activeInsights
                 .Where(insight => insight.Direction == InsightDirection.Up)
                 .OrderByDescending(insight => insight.Magnitude)
                 .Select(insight => insight.Symbol)
@@ -200,6 +207,13 @@ namespace QuantConnect
         public override void OnSecuritiesChanged(QCAlgorithm algorithm, SecurityChanges changes)
         {
             base.OnSecuritiesChanged(algorithm, changes);
+            foreach (var removed in changes.RemovedSecurities)
+            {
+                if (algorithm.Portfolio.ContainsKey(removed.Symbol))
+                {
+                    algorithm.Liquidate(removed.Symbol, "Removed from Universe");
+                }
+            }
             // Log the changes
             var currentDate = algorithm.Time.ToString(DateFormat);
             foreach (var universe in algorithm.UniverseManager.Values)
@@ -268,14 +282,6 @@ namespace QuantConnect
             var optimizer = this._optimizer;
             var optimizedWeights = optimizer.Optimize(historicalReturns);
 
-            // logging
-            var symbolWeights = new Dictionary<Symbol, decimal>();
-            for (int i = 0; i < nAssets; i++)
-            {
-                symbolWeights[validSymbols[i]] = (decimal)optimizedWeights[i];
-            }
-            var weightsStr = string.Join(", ", symbolWeights.OrderByDescending(kvp => kvp.Value).Select(kvp => $"{kvp.Key.Value}: {kvp.Value * 100:F2}%"));
-            algorithm.Log($"[OptimizePortfolio] Optimized Weights: {weightsStr}");
             return optimizedWeights.Select(w => (decimal)w).ToList();
         }
 

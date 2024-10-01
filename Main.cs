@@ -68,7 +68,7 @@ using MathNet.Numerics.Statistics;
 #endregion
 namespace QuantConnect.Algorithm.CSharp
 {
-   
+
     // Check out the overview of QCAlgorithm:
     // https://www.quantconnect.com/docs/v2/writing-algorithms/key-concepts/algorithm-engine#03-Your-Algorithm-and-LEAN
     public class League2024Q4 : QCAlgorithm
@@ -94,6 +94,7 @@ namespace QuantConnect.Algorithm.CSharp
             (new DateTime(2004, 1, 1), new DateTime(2024, 6, 1)), //[13] 20 years
             (new DateTime(1999, 1, 1), new DateTime(2024, 6, 1)), //[14] 25 years
             (new DateTime(1998, 1, 1), new DateTime(2016, 6, 1)), //[15] 18 years  (1999-11-28 => 2003-02-28, -66.10%) (2007-07-12 => 2009-03-12, -61.17%)
+            (new DateTime(2019, 1, 1), new DateTime(2019, 6, 1)), //[16] 6 months
         };
         /* Events Identified:
          1. 2020-01-20 to 2020-04-04 (-41.33%)
@@ -124,7 +125,7 @@ namespace QuantConnect.Algorithm.CSharp
         */
         public const int PeriodIndex = 0;
         public override void Initialize()
-        
+
         {
             /*************** Start Default Initialization *****************/
             // Set Dates (will be ignored in live mode)
@@ -200,7 +201,8 @@ namespace QuantConnect.Algorithm.CSharp
             // Set Portfolio
             Settings.RebalancePortfolioOnInsightChanges = false;
             Settings.RebalancePortfolioOnSecurityChanges = false;
-            SetPortfolioConstruction(new SortinoEfficientFrontierPortfolioConstructionModel());
+            // SetPortfolioConstruction(new SortinoEfficientFrontierPortfolioConstructionModel());
+            SetPortfolioConstruction(new MomentumPortfolioConstructionModel());
             // Set Risk 
             // Set Execution
             SetExecution(new ImmediateExecutionModel());
