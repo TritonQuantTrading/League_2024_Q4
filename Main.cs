@@ -200,8 +200,7 @@ namespace QuantConnect.Algorithm.CSharp
             // Set Portfolio
             Settings.RebalancePortfolioOnInsightChanges = false;
             Settings.RebalancePortfolioOnSecurityChanges = false;
-            // TODO: SortinoEfficientFrontierPortfolioConstructionModel
-            SetPortfolioConstruction(new MomentumPortfolioConstructionModel());
+            SetPortfolioConstruction(new SortinoEfficientFrontierPortfolioConstructionModel());
             // Set Risk 
             // Set Execution
             SetExecution(new ImmediateExecutionModel());
