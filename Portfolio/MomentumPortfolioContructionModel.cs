@@ -115,16 +115,7 @@ namespace QuantConnect
         // Create list of PortfolioTarget objects from Insights.
         public override List<PortfolioTarget> CreateTargets(QCAlgorithm algorithm, Insight[] insights)
         {
-            foreach (var insight in insights)
-            {
-                // log the insight
-                var symbol = insight.Symbol;
-                var direction = insight.Direction;
-                var magnitude = insight.Magnitude;
-                var confidence = insight.Confidence;
-                var time = algorithm.UtcTime;
-                algorithm.Log($"[CreateTargets] {time}: {symbol.Value} - {direction} ({magnitude:F2}, {confidence:F2})");
-            }
+
             foreach (var kvp in this._momp)
             {
                 kvp.Value.Update(algorithm.Time, algorithm.Securities[kvp.Key].Close);
@@ -136,11 +127,24 @@ namespace QuantConnect
             {
                 return targets.Cast<PortfolioTarget>().ToList();
             }
+            string logMessage = $"{algorithm.Time.ToString(DateFormat)}: Insight Holdings: [";
+            foreach (var insight in insights)
+            {
+                // log the insight
+                var symbol = insight.Symbol;
+                var direction = insight.Direction == InsightDirection.Up ? "^" : "v";
+                var magnitude = insight.Magnitude;
+                logMessage += $"({symbol.Value}: {direction}{magnitude:F2}); ";
+            }
+            logMessage += "]";
+            algorithm.Log(logMessage);
             var sortedMom = (from kvp in this._momp
                              where kvp.Value.IsReady
                              orderby kvp.Value.Current.Value descending
                              select kvp.Key).ToList();
             var selected = sortedMom.Take(this._numLong).ToList();
+            string selectedStr = string.Join(", ", selected.Select(s => s.Value));
+            algorithm.Log($"{algorithm.Time.ToString(DateFormat)}: Selected Symbols: [{selectedStr}]");
             var newHoldings = new HashSet<Symbol>(selected);
 
             if (!newHoldings.SetEquals(this._currentHoldings) || this._lastRebalanceTime == algorithm.UtcTime)
@@ -159,7 +163,7 @@ namespace QuantConnect
                 var symbol = kvp.Key;
                 var weight = kvp.Value;
                 var quantity = algorithm.CalculateOrderQuantity(symbol, weight);
-                var currentQuantity = algorithm.Portfolio[symbol].Quantity; 
+                var currentQuantity = algorithm.Portfolio[symbol].Quantity;
                 var targetQuantity = quantity + currentQuantity;
                 var target = new PortfolioTarget(symbol, targetQuantity);
                 targets.Add(target);
@@ -222,7 +226,9 @@ namespace QuantConnect
                 if (!this._momp.ContainsKey(symbol) && symbol.SecurityType == SecurityType.Equity)
                 {
                     this._momp[symbol] = new MomentumPercent(this._lookback);
-                }else {
+                }
+                else
+                {
                     if (symbol.SecurityType != SecurityType.Equity)
                     {
                         algorithm.Log($"[OnSecuritiesChanged] {symbol.Value} is not an equity security. Skipping.");

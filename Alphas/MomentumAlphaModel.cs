@@ -97,10 +97,10 @@ namespace QuantConnect
         {
             var insights = new List<Insight>();
 
-            // Rank symbols based on ROC
+            // Rank symbols based on _momp
             var rankedSymbols = _symbolDataDict
-                .Where(kvp => kvp.Value.ROC.IsReady)
-                .OrderByDescending(kvp => kvp.Value.ROC.Current.Value)
+                .Where(kvp => kvp.Value.MOMP.IsReady)
+                .OrderByDescending(kvp => kvp.Value.MOMP.Current.Value)
                 .ToList();
 
             // Select top long and top short symbols
@@ -108,15 +108,23 @@ namespace QuantConnect
             var topShorts = rankedSymbols.TakeLast(_numShort).Select(kvp => kvp.Key).ToList();
 
             // Generate long insights
-            foreach (var symbol in topLongs)
+            // foreach (var symbol in topLongs)
+            var longSum = (topLongs.Count * (topLongs.Count + 1)) / 2;
+            for (int i = 0; i < topLongs.Count; i++)
             {
-                insights.Add(Insight.Price(symbol, _predictionInterval, InsightDirection.Up));
+                var symbol = topLongs[i];
+                var magnitude = (topLongs.Count - i) / (double)longSum;
+                insights.Add(Insight.Price(symbol, _predictionInterval, InsightDirection.Up, magnitude));
             }
 
             // Generate short insights
-            foreach (var symbol in topShorts)
+            // foreach (var symbol in topShorts)
+            var shortSum = (topShorts.Count * (topShorts.Count + 1)) / 2;
+            for (int i = 0; i < topShorts.Count; i++)
             {
-                insights.Add(Insight.Price(symbol, _predictionInterval, InsightDirection.Down));
+                var symbol = topShorts[i];
+                var magnitude = (i + 1) / (double)shortSum;
+                insights.Add(Insight.Price(symbol, _predictionInterval, InsightDirection.Down, magnitude));
             }
 
             return insights;
@@ -155,24 +163,33 @@ namespace QuantConnect
         // Nested SymbolData class
         private class SymbolData : IDisposable
         {
-            public Security Security { get; }
-            public RateOfChange ROC { get; }
-            private readonly IDataConsolidator _consolidator;
-            private readonly SubscriptionManager _subscriptionManager;
+            private readonly QCAlgorithm _algorithm;
+            private readonly IDataConsolidator _mompConsolidator;
+            private readonly MomentumPercent _momp;
+            private readonly Security _security;
+
+
+            public Symbol Symbol => _security.Symbol;
+
+            public MomentumPercent MOMP => _momp;
 
             public SymbolData(QCAlgorithm algorithm, Symbol symbol, int lookback, Resolution resolution)
             {
-                Security = algorithm.Securities[symbol];
-                ROC = new RateOfChange(symbol.ToString(), lookback);
-                _consolidator = algorithm.ResolveConsolidator(symbol, resolution);
-                _subscriptionManager = algorithm.SubscriptionManager;
+                _algorithm = algorithm;
+                _security = algorithm.Securities[symbol];
 
-                algorithm.RegisterIndicator(symbol, ROC, _consolidator);
+                _mompConsolidator = algorithm.ResolveConsolidator(symbol, resolution);
+                algorithm.SubscriptionManager.AddConsolidator(symbol, _mompConsolidator);
+
+                _momp = new MomentumPercent(symbol.ToString(), lookback);
+
+                algorithm.RegisterIndicator(symbol, _momp, _mompConsolidator);
+                algorithm.WarmUpIndicator(symbol, _momp, resolution);
             }
 
             public void Dispose()
             {
-                _subscriptionManager.RemoveConsolidator(Security.Symbol, _consolidator);
+                _algorithm.SubscriptionManager.RemoveConsolidator(_security.Symbol, _mompConsolidator);
             }
         }
 

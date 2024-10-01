@@ -195,9 +195,7 @@ namespace QuantConnect.Algorithm.CSharp
             //     new BasicUniverseSelectionModel(), _optionFilter
             // )); // Don't need to add the basic universe selection model in advance since it is handled internally
             // Set Alphas
-            // TODO: MomentumAlphaModel
             // TODO: ProtectivePutAlphaModel
-            // AddAlpha(new TempAlphaModel());
             AddAlpha(new MomentumAlphaModel());
             // Set Portfolio
             Settings.RebalancePortfolioOnInsightChanges = false;
@@ -210,7 +208,7 @@ namespace QuantConnect.Algorithm.CSharp
             /****************** End Algorithm Framework *******************/
 
             // Set Warmup Period
-            // SetWarmUp(PLookback/2, Resolution.Daily);
+            // SetWarmUp(252, Resolution.Daily);
         }
         public override void OnWarmupFinished()
         {
