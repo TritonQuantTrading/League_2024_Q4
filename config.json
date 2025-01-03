@@ -191,5 +191,6 @@
             }
         ]
     },
-    "python-venv": 1
+    "python-venv": 1,
+    "deployment-target": "Cloud Platform"
 }

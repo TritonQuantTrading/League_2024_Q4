@@ -78,7 +78,7 @@ namespace QuantConnect.Algorithm.CSharp
         public const decimal InitialCash = 1_000_000;
         public readonly (DateTime, DateTime)[] TestPeriods = new[]
         {                                                         //[i]  [N] years (start => end, drawdown < -20%)
-            (new DateTime(2019, 1, 1), new DateTime(2024, 6, 1)), //[0]  5 years   (2020-01-20 => 2020-04-04, -41.33%)
+            (new DateTime(2019, 1, 1), new DateTime(2024, 12, 1)), //[0]  5 years   (2020-01-20 => 2020-04-04, -41.33%)
             (new DateTime(2014, 1, 1), new DateTime(2024, 6, 1)), //[1]  10 years  (2020-01-20 => 2020-04-04, -41.33%)
             (new DateTime(2014, 1, 1), new DateTime(2019, 6, 1)), //[2]  5 years
             (new DateTime(2009, 1, 1), new DateTime(2014, 6, 1)), //[3]  5 years   (2010-03-16 => 2012-01-31, -27.54%)
@@ -203,7 +203,8 @@ namespace QuantConnect.Algorithm.CSharp
             Settings.RebalancePortfolioOnSecurityChanges = false;
             // SetPortfolioConstruction(new SortinoEfficientFrontierPortfolioConstructionModel());
             SetPortfolioConstruction(new MomentumPortfolioConstructionModel());
-            // Set Risk 
+            // Set Risk
+            SetRiskManagement(new ProtectivePutModel());
             // Set Execution
             SetExecution(new ImmediateExecutionModel());
             /****************** End Algorithm Framework *******************/

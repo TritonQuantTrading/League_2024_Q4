@@ -167,7 +167,7 @@ namespace QuantConnect
                 {
                     var symbolData = new SymbolData(algorithm, added.Symbol,  _lookback, _resolution);
                     _symbolDataDict[added.Symbol] = symbolData;
-                    algorithm.Log($"[MomentumAlphaModel] Added {added.Symbol.Value}: {symbolData.MOMP.Current.Value}");
+                    // algorithm.Log($"[MomentumAlphaModel] Added {added.Symbol.Value}: {symbolData.MOMP.Current.Value}");
                 }
                 else
                 {

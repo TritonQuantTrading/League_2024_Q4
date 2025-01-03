@@ -128,17 +128,17 @@ namespace QuantConnect
             {
                 return targets.Cast<PortfolioTarget>().ToList();
             }
-            string logMessage = $"{algorithm.Time.ToString(DateFormat)}: Insight Holdings: [";
-            foreach (var insight in insights.OrderByDescending(i => i.Magnitude).ThenBy(i => i.Direction))
-            {
-                // log the insight
-                var symbol = insight.Symbol;
-                var direction = insight.Direction == InsightDirection.Up ? "^" : "v";
-                var magnitude = insight.Magnitude;
-                logMessage += $"({symbol.Value}: {direction}{magnitude:F2}); ";
-            }
-            // logMessage += "]";
-            algorithm.Log(logMessage);
+            // string logMessage = $"{algorithm.Time.ToString(DateFormat)}: Insight Holdings: [";
+            // foreach (var insight in insights.OrderByDescending(i => i.Magnitude).ThenBy(i => i.Direction))
+            // {
+            //     // log the insight
+            //     var symbol = insight.Symbol;
+            //     var direction = insight.Direction == InsightDirection.Up ? "^" : "v";
+            //     var magnitude = insight.Magnitude;
+            //     logMessage += $"({symbol.Value}: {direction}{magnitude:F2}); ";
+            // }
+            // // logMessage += "]";
+            // algorithm.Log(logMessage);
             var sortedMom = (from kvp in this._momp
                              where kvp.Value.IsReady
                              orderby kvp.Value.Current.Value descending
@@ -227,7 +227,7 @@ namespace QuantConnect
                 if (!this._momp.ContainsKey(symbol) && symbol.SecurityType == SecurityType.Equity)
                 {
                     this._momp[symbol] = new MomentumPercent(this._lookback);
-                    algorithm.Log($"[MomentumPortfolioConstructionModel] Added {symbol.Value}: {this._momp[symbol].Current.Value}");
+                    // algorithm.Log($"[MomentumPortfolioConstructionModel] Added {symbol.Value}: {this._momp[symbol].Current.Value}");
                 }
                 else
                 {
@@ -257,11 +257,11 @@ namespace QuantConnect
             var currentDate = algorithm.Time.ToString(DateFormat);
             foreach (var universe in algorithm.UniverseManager.Values)
             {
-                algorithm.Log($"{currentDate}: Updated Universe: {universe.Configuration.Symbol}: {universe.Members.Count} members");
+                // algorithm.Log($"{currentDate}: Updated Universe: {universe.Configuration.Symbol}: {universe.Members.Count} members");
             }
             var addedStr = string.Join(", ", changes.AddedSecurities.Select(security => security.Symbol.Value));
             var removedStr = string.Join(", ", changes.RemovedSecurities.Select(security => security.Symbol.Value));
-            algorithm.Log($"{currentDate}: Security Changes: (+{changes.AddedSecurities.Count})[{addedStr}], (-{changes.RemovedSecurities.Count})[{removedStr}]");
+            // algorithm.Log($"{currentDate}: Security Changes: (+{changes.AddedSecurities.Count})[{addedStr}], (-{changes.RemovedSecurities.Count})[{removedStr}]");
         }
         // Customized helper methods
         public void AdjustPortfolio(QCAlgorithm algorithm)
@@ -303,7 +303,7 @@ namespace QuantConnect
             var targetedWeightsStr = string.Join(", ", this._targetWeights.OrderByDescending(kvp => kvp.Value).Select(kvp => $"{kvp.Key.Value}: {kvp.Value * 100:F2}%"));
             algorithm.Log($"{currentDate}: Targeted Holdings: [{targetedWeightsStr}]");
             var holdingsStr = string.Join(", ", holdings.OrderByDescending(kvp => kvp.Value).Select(kvp => $"{kvp.Key}: {kvp.Value:F2}%"));
-            algorithm.Log($"{currentDate}: Holdings[{sumOfAllHoldings:F2}%]: [{holdingsStr}]");
+            algorithm.Log($"{currentDate}: Holdings[{sumOfAllHoldings:F2}%]: [{holdingsStr}] (Total Assets: {algorithm.Portfolio.TotalPortfolioValue:F2})");
         }
         public List<decimal> OptimizePortfolio(QCAlgorithm algorithm, List<Symbol> selectedSymbols)
         {
@@ -320,8 +320,11 @@ namespace QuantConnect
             // Portfolio Optimizers: [5 years] awesome (>= 300), good (>= 200), medium (>= 100), ordinary (< 100)
             var optimizer = this._optimizer;
             var optimizedWeights = optimizer.Optimize(historicalReturns);
+            // var total = optimizedWeights.Length;
+            // algorithm.Log($"[OptimizePortfolio] Optimized Weights: [{string.Join(", ", optimizedWeights.Select(w => w.ToString("F4")))}]");
 
-            return optimizedWeights.Select(w => (decimal)w).ToList();
+            // return optimizedWeights.Select(w => (decimal) (1m / total)).ToList();
+            return optimizedWeights.Select(w => (decimal) (w)).ToList();
         }
 
         private (double[,] historicalReturns, List<Symbol> validSymbols) GetHistoricalReturnsMatrix(QCAlgorithm algorithm, List<Symbol> selectedSymbols)
