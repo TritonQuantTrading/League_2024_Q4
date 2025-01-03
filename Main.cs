@@ -62,7 +62,6 @@ using Accord.Math;
 using Accord.Math.Optimization;
 using Accord.Statistics;
 using Accord;
-using Fasterflect;
 using MathNet.Numerics.LinearAlgebra;
 using MathNet.Numerics.Statistics;
 #endregion
@@ -171,7 +170,7 @@ namespace QuantConnect.Algorithm.CSharp
             /***************** Start Algorithm Framework ******************/
             // Set Universe Settings
             UniverseSettings.Resolution = Resolution.Daily;
-            // UniverseSettings.DataNormalizationMode = DataNormalizationMode.Raw; // allow options
+            UniverseSettings.DataNormalizationMode = DataNormalizationMode.Raw; // allow options
             UniverseSettings.Schedule.On(DateRules.MonthStart());
             // UniverseSettings.Asynchronous = true; // This would cause backtest consistency issues, see: https://www.quantconnect.com/docs/v2/writing-algorithms/algorithm-framework/universe-selection/universe-settings#09-Asynchronous-Selection
             // UniverseSettings.ExtendedMarketHours = true; // only set to true if you are performing intraday trading
