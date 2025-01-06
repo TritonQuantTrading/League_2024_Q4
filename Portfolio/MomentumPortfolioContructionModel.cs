@@ -76,7 +76,7 @@ namespace QuantConnect
         public const int PNumLong = 5;
         public const decimal PAdjustmentStep = 1.0m;
         public const int PNPortfolios = 1000;
-        public const int PRandSeed = 97; // 97, 18, 23, 
+        public const int PRandSeed = 23; // 97, 18, 23, 
         // readonly properties
         private readonly int _lookback;
         private readonly int _shortLookback;

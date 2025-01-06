@@ -1,3 +1,65 @@
+#region imports
+    using System;
+    using System.Collections;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Globalization;
+    using System.Drawing;
+    using QuantConnect;
+    using QuantConnect.Algorithm.Framework;
+    using QuantConnect.Algorithm.Framework.Selection;
+    using QuantConnect.Algorithm.Framework.Alphas;
+    using QuantConnect.Algorithm.Framework.Portfolio;
+    using QuantConnect.Algorithm.Framework.Portfolio.SignalExports;
+    using QuantConnect.Algorithm.Framework.Execution;
+    using QuantConnect.Algorithm.Framework.Risk;
+    using QuantConnect.Algorithm.Selection;
+    using QuantConnect.Api;
+    using QuantConnect.Parameters;
+    using QuantConnect.Benchmarks;
+    using QuantConnect.Brokerages;
+    using QuantConnect.Commands;
+    using QuantConnect.Configuration;
+    using QuantConnect.Util;
+    using QuantConnect.Interfaces;
+    using QuantConnect.Algorithm;
+    using QuantConnect.Indicators;
+    using QuantConnect.Data;
+    using QuantConnect.Data.Auxiliary;
+    using QuantConnect.Data.Consolidators;
+    using QuantConnect.Data.Custom;
+    using QuantConnect.Data.Custom.IconicTypes;
+    using QuantConnect.DataSource;
+    using QuantConnect.Data.Fundamental;
+    using QuantConnect.Data.Market;
+    using QuantConnect.Data.Shortable;
+    using QuantConnect.Data.UniverseSelection;
+    using QuantConnect.Notifications;
+    using QuantConnect.Orders;
+    using QuantConnect.Orders.Fees;
+    using QuantConnect.Orders.Fills;
+    using QuantConnect.Orders.OptionExercise;
+    using QuantConnect.Orders.Slippage;
+    using QuantConnect.Orders.TimeInForces;
+    using QuantConnect.Python;
+    using QuantConnect.Scheduling;
+    using QuantConnect.Securities;
+    using QuantConnect.Securities.Equity;
+    using QuantConnect.Securities.Future;
+    using QuantConnect.Securities.Option;
+    using QuantConnect.Securities.Positions;
+    using QuantConnect.Securities.Forex;
+    using QuantConnect.Securities.Crypto;
+    using QuantConnect.Securities.CryptoFuture;
+    using QuantConnect.Securities.IndexOption;
+    using QuantConnect.Securities.Interfaces;
+    using QuantConnect.Securities.Volatility;
+    using QuantConnect.Storage;
+    using QuantConnect.Statistics;
+    using QCAlgorithmFramework = QuantConnect.Algorithm.QCAlgorithm;
+    using QCAlgorithmFrameworkBridge = QuantConnect.Algorithm.QCAlgorithm;
+    using Calendar = QuantConnect.Data.Consolidators.Calendar;
+#endregion
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,44 +72,33 @@ using QuantConnect.Securities.Option;
 
 namespace QuantConnect
 {
-    /// <summary>
-    /// A simple, textbook Protective Put model. 
-    /// - For each invested equity, purchase near-OTM puts with 30–60 days to expiration.
-    /// - 1 put contract per 100 shares (round down).
-    /// - Minimal overhead: no trailing stops, no intraday logic, no rolling near expiry.
-    /// </summary>
     public class ProtectivePutModel : RiskManagementModel
     {
-        // ~3% OTM. For example, if equity Price=100, PutStrike=~97
         private readonly decimal _putStrikePercent = 0.97m;
-
-        // We'll look for options with 30 to 60 days to expiration
-        private readonly int _minDaysToExpiration = 30;
-        private readonly int _maxDaysToExpiration = 60;
-
-        // Liquidity constraints
+        private readonly int _minDaysToExpiration = 90;
+        private readonly int _maxDaysToExpiration = 120;
         private readonly decimal _minOptionVolume = 50;
         private readonly decimal _maxBidAskSpread = 0.15m;
 
-        // Keep track of which Option contracts we currently hold for each equity
         private Dictionary<Symbol, Symbol> _protectivePuts;
-        // Make sure we add the Option chain only once per equity
         private HashSet<Symbol> _optionUniverses;
+        private DateTime _lastRebalance;
 
         public ProtectivePutModel()
         {
             _protectivePuts = new Dictionary<Symbol, Symbol>();
             _optionUniverses = new HashSet<Symbol>();
+            _lastRebalance = DateTime.MinValue;
         }
 
-        /// <summary>
-        /// Called by the framework to manage portfolio risk.
-        /// </summary>
         public override IEnumerable<IPortfolioTarget> ManageRisk(QCAlgorithm algorithm, IPortfolioTarget[] targets)
         {
+            if (!ShouldRebalance(algorithm.Time))
+                return Enumerable.Empty<IPortfolioTarget>();
+
+            _lastRebalance = algorithm.Time;
             var riskAdjustedTargets = new List<IPortfolioTarget>();
 
-            // For each invested equity, buy the corresponding protective puts
             foreach (var holdingKvp in algorithm.Portfolio)
             {
                 var security = holdingKvp.Value;
@@ -55,32 +106,22 @@ namespace QuantConnect
                 if (!security.Invested || symbol.SecurityType != SecurityType.Equity)
                     continue;
 
-                // 1) Ensure we have an option chain for this equity
                 if (!_optionUniverses.Contains(symbol))
                 {
                     algorithm.AddOption(symbol);
                     _optionUniverses.Add(symbol);
-                    // We'll wait until the next ManageRisk call after chain data is available
                     continue;
                 }
 
-                // 2) Retrieve the option chain
-                var chain = algorithm.OptionChainProvider.GetOptionContractList(symbol, algorithm.Time);
-                if (chain == null || !chain.Any()) 
-                    continue;
-
-                // 3) If we already hold a put, check if it's still invested
                 if (_protectivePuts.TryGetValue(symbol, out var existingPutSymbol))
                 {
                     if (!algorithm.Portfolio.ContainsKey(existingPutSymbol) ||
                         !algorithm.Portfolio[existingPutSymbol].Invested)
                     {
-                        // We no longer hold that put => remove from dictionary
                         _protectivePuts.Remove(symbol);
                     }
                 }
 
-                // 4) If we don't currently hold a put, let's find one to buy
                 if (!_protectivePuts.ContainsKey(symbol))
                 {
                     var price = security.Price;
@@ -88,7 +129,10 @@ namespace QuantConnect
                     var earliest = algorithm.Time.AddDays(_minDaysToExpiration);
                     var latest = algorithm.Time.AddDays(_maxDaysToExpiration);
 
-                    // Filter for near-OTM puts with 30–60 DTE
+                    var chain = algorithm.OptionChainProvider.GetOptionContractList(symbol, algorithm.Time);
+                    if (chain == null || !chain.Any()) 
+                        continue;
+
                     var puts = chain
                         .Where(c =>
                             c.ID.OptionRight == OptionRight.Put &&
@@ -97,14 +141,13 @@ namespace QuantConnect
                             c.ID.StrikePrice >= targetStrike * 0.98m &&
                             c.ID.StrikePrice <= targetStrike * 1.02m &&
                             algorithm.Securities.ContainsKey(c))
-                        .OrderBy(c => Math.Abs((c.ID.Date - earliest).TotalDays))
+                        .OrderBy(c => Math.Abs((c.ID.Date - earliest).Days))
                         .ThenBy(c => Math.Abs(c.ID.StrikePrice - targetStrike))
                         .ToList();
 
                     if (!puts.Any()) 
                         continue;
 
-                    // Check liquidity
                     var liquidPuts = puts.Where(contract =>
                     {
                         var opt = algorithm.Securities[contract];
@@ -122,30 +165,19 @@ namespace QuantConnect
                     if (!liquidPuts.Any()) 
                         continue;
 
-                    // Select the first "best match"
                     var selectedPut = liquidPuts.First();
                     _protectivePuts[symbol] = selectedPut;
 
-                    // 1 put contract per each 100 shares
                     var equityShares = Math.Abs(security.Quantity);
-                    var contractsNeeded = equityShares / 100;
+                    var contractsNeeded = Math.Floor(equityShares / 100);
                     if (contractsNeeded > 0)
                     {
                         riskAdjustedTargets.Add(new PortfolioTarget(selectedPut, contractsNeeded));
-                        algorithm.Debug(
-                            $"{algorithm.Time:yyyy-MM-dd HH:mm:ss} - Buying protective put for {symbol.Value} => {selectedPut} (qty={contractsNeeded})"
-                        );
                     }
-                }
-                else
-                {
-                    // Possibly we'd hold the existing put until it expires or is no longer needed
-                    // This simple approach doesn't proactively roll or close near-expiry puts
                 }
             }
 
-            // 5) If an equity is no longer invested, remove its put
-            foreach (var kvp in _protectivePuts)
+            foreach (var kvp in _protectivePuts.ToList())
             {
                 var equitySymbol = kvp.Key;
                 if (!algorithm.Portfolio.ContainsKey(equitySymbol) ||
@@ -155,13 +187,22 @@ namespace QuantConnect
                     if (algorithm.Portfolio.ContainsKey(putSymbol) &&
                         algorithm.Portfolio[putSymbol].Invested)
                     {
-                        // Liquidate the leftover put
                         riskAdjustedTargets.Add(new PortfolioTarget(putSymbol, 0));
                     }
+                    _protectivePuts.Remove(equitySymbol);
                 }
             }
 
             return riskAdjustedTargets;
+        }
+
+        private bool ShouldRebalance(DateTime currentTime)
+        {
+            if (_lastRebalance == DateTime.MinValue)
+                return true;
+
+            var timeSinceLastRebalance = currentTime - _lastRebalance;
+            return timeSinceLastRebalance.Days >= 30;
         }
     }
 }
