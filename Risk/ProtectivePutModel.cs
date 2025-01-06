@@ -74,11 +74,12 @@ namespace QuantConnect
 {
     public class ProtectivePutModel : RiskManagementModel
     {
-        private readonly decimal _putStrikePercent = 0.97m;
+        private readonly decimal _baseStrikePercent = 0.97m;
         private readonly int _minDaysToExpiration = 90;
         private readonly int _maxDaysToExpiration = 120;
-        private readonly decimal _minOptionVolume = 50;
-        private readonly decimal _maxBidAskSpread = 0.15m;
+
+        private readonly decimal _minOptionVolume = 10;
+        private readonly decimal _maxBidAskSpread = 0.30m;
 
         private Dictionary<Symbol, Symbol> _protectivePuts;
         private HashSet<Symbol> _optionUniverses;
@@ -99,10 +100,11 @@ namespace QuantConnect
             _lastRebalance = algorithm.Time;
             var riskAdjustedTargets = new List<IPortfolioTarget>();
 
-            foreach (var holdingKvp in algorithm.Portfolio)
+            foreach (var kvp in algorithm.Portfolio)
             {
-                var security = holdingKvp.Value;
+                var security = kvp.Value;
                 var symbol = security.Symbol;
+
                 if (!security.Invested || symbol.SecurityType != SecurityType.Equity)
                     continue;
 
@@ -110,84 +112,190 @@ namespace QuantConnect
                 {
                     algorithm.AddOption(symbol);
                     _optionUniverses.Add(symbol);
+                    algorithm.Log($"[PUT_UNIVERSE] {algorithm.Time:yyyy-MM-dd} Adding options universe for {symbol.Value}");
                     continue;
                 }
 
                 if (_protectivePuts.TryGetValue(symbol, out var existingPutSymbol))
                 {
-                    if (!algorithm.Portfolio.ContainsKey(existingPutSymbol) ||
-                        !algorithm.Portfolio[existingPutSymbol].Invested)
+                    if (algorithm.Portfolio.ContainsKey(existingPutSymbol)
+                        && algorithm.Portfolio[existingPutSymbol].Invested)
+                    {
+                        algorithm.Log($"[PUT_DEBUG] {algorithm.Time:yyyy-MM-dd} {symbol.Value} has existing put {existingPutSymbol.Value} still invested. Skipping new put.");
+                        continue;
+                    }
+                    else
                     {
                         _protectivePuts.Remove(symbol);
+                        algorithm.Log($"[PUT_DEBUG] {algorithm.Time:yyyy-MM-dd} {symbol.Value} had a put {existingPutSymbol.Value} but not invested anymore. Will look for a new put.");
                     }
                 }
 
-                if (!_protectivePuts.ContainsKey(symbol))
+                var chain = algorithm.OptionChainProvider.GetOptionContractList(symbol, algorithm.Time);
+                if (chain == null)
                 {
-                    var price = security.Price;
-                    var targetStrike = price * _putStrikePercent;
-                    var earliest = algorithm.Time.AddDays(_minDaysToExpiration);
-                    var latest = algorithm.Time.AddDays(_maxDaysToExpiration);
+                    algorithm.Log($"[PUT_ERROR] {algorithm.Time:yyyy-MM-dd} {symbol.Value}: chain is null");
+                    continue;
+                }
 
-                    var chain = algorithm.OptionChainProvider.GetOptionContractList(symbol, algorithm.Time);
-                    if (chain == null || !chain.Any()) 
-                        continue;
+                var totalContracts = chain.Count();
+                if (totalContracts == 0)
+                {
+                    algorithm.Log($"[PUT_ERROR] {algorithm.Time:yyyy-MM-dd} {symbol.Value}: No option chain available (Count=0)");
+                    continue;
+                }
+                algorithm.Log($"[PUT_DEBUG] {algorithm.Time:yyyy-MM-dd} {symbol.Value} chain.Count()={totalContracts}");
 
-                    var puts = chain
-                        .Where(c =>
-                            c.ID.OptionRight == OptionRight.Put &&
-                            c.ID.Date >= earliest &&
-                            c.ID.Date <= latest &&
-                            c.ID.StrikePrice >= targetStrike * 0.98m &&
-                            c.ID.StrikePrice <= targetStrike * 1.02m &&
-                            algorithm.Securities.ContainsKey(c))
-                        .OrderBy(c => Math.Abs((c.ID.Date - earliest).Days))
-                        .ThenBy(c => Math.Abs(c.ID.StrikePrice - targetStrike))
+                var historyData = algorithm.History(symbol, 60, Resolution.Daily).ToList();
+                if (historyData.Count < 60)
+                {
+                    algorithm.Log($"[PUT_ERROR] {algorithm.Time:yyyy-MM-dd} {symbol.Value}: Insufficient price history");
+                    continue;
+                }
+                var startPrice = historyData.First().Close;
+                var currentPrice = historyData.Last().Close;
+                var priceReturn = (currentPrice - startPrice) / startPrice;
+
+                decimal targetPrice;
+                if (priceReturn >= 0.20m)
+                {
+                    targetPrice = currentPrice * 0.96m * (1m + priceReturn);
+                    algorithm.Log($"[PUT_TARGET] {algorithm.Time:yyyy-MM-dd} {symbol.Value}: High return ({priceReturn:P2}), target protection at ${targetPrice:F2}");
+                }
+                else if (priceReturn >= 0.10m)
+                {
+                    targetPrice = currentPrice * 0.97m * (1m + priceReturn);
+                    algorithm.Log($"[PUT_TARGET] {algorithm.Time:yyyy-MM-dd} {symbol.Value}: Medium return ({priceReturn:P2}), target protection at ${targetPrice:F2}");
+                }
+                else
+                {
+                    targetPrice = currentPrice * _baseStrikePercent;
+                    algorithm.Log($"[PUT_TARGET] {algorithm.Time:yyyy-MM-dd} {symbol.Value}: Base case, target protection at ${targetPrice:F2}");
+                }
+
+                var allExpiries = chain
+                    .Select(c => c.ID.Date)
+                    .Distinct()
+                    .OrderBy(d => d)
+                    .ToList();
+                algorithm.Log($"[PUT_EXPIRY] {algorithm.Time:yyyy-MM-dd} {symbol.Value}: All expiries: {string.Join(", ", allExpiries.Select(d => d.ToString("yyyy-MM-dd")))}");
+
+                var desiredExpiries = allExpiries
+                    .Where(d => (d - algorithm.Time).TotalDays >= _minDaysToExpiration
+                             && (d - algorithm.Time).TotalDays <= _maxDaysToExpiration)
+                    .OrderBy(d => d)
+                    .ToList();
+                algorithm.Log($"[PUT_EXPIRY_DESIRED] {algorithm.Time:yyyy-MM-dd} {symbol.Value}: Desired expiries ({_minDaysToExpiration}-{_maxDaysToExpiration} days): {string.Join(", ", desiredExpiries.Select(d => d.ToString("yyyy-MM-dd")))}");
+
+                if (!desiredExpiries.Any())
+                {
+                    algorithm.Log($"[PUT_ERROR] {algorithm.Time:yyyy-MM-dd} {symbol.Value}: No puts found at desired expiry");
+                    continue;
+                }
+
+                var validPuts = new List<Symbol>();
+                
+                foreach (var expiry in desiredExpiries)
+                {
+                    var putsAtExpiry = chain
+                        .Where(c => c.ID.OptionRight == OptionRight.Put && c.ID.Date == expiry)
+                        .OrderByDescending(c => c.ID.StrikePrice)
                         .ToList();
 
-                    if (!puts.Any()) 
-                        continue;
-
-                    var liquidPuts = puts.Where(contract =>
+                    if (!putsAtExpiry.Any())
                     {
-                        var opt = algorithm.Securities[contract];
+                        algorithm.Log($"[PUT_DEBUG] {algorithm.Time:yyyy-MM-dd} {symbol.Value}: expiry={expiry:yyyy-MM-dd} => no Put contracts");
+                        continue;
+                    }
+
+                    algorithm.Log($"[PUT_DEBUG] {algorithm.Time:yyyy-MM-dd} {symbol.Value}: expiry={expiry:yyyy-MM-dd}, found {putsAtExpiry.Count} put(s). Now checking each...");
+
+                    foreach (var put in putsAtExpiry)
+                    {
+                        if (!algorithm.Securities.ContainsKey(put))
+                        {
+                            algorithm.AddOptionContract(put, Resolution.Minute);
+                            algorithm.Log($"[PUT_DEBUG] skip put={put.Value}, reason=Securities not exist. Possibly data not added yet for this contract?");
+                        }
+
+                        if (!algorithm.Securities.ContainsKey(put))
+                        {
+                            algorithm.Log($"[PUT_DEBUG] {put.Value} still no data this bar. Might skip or wait next bar.");
+                            continue;
+                        }
+
+                        var opt = algorithm.Securities[put];
+                        var volume = opt.Volume;
                         var bid = opt.BidPrice;
                         var ask = opt.AskPrice;
-                        var volume = opt.Volume;
 
-                        if (ask <= 0) return false;
-                        if (volume < _minOptionVolume) return false;
+                        algorithm.Log($"[PUT_DETAIL] {algorithm.Time:yyyy-MM-dd} {symbol.Value}: Strike={put.ID.StrikePrice:F2}, Bid={bid:F2}, Ask={ask:F2}, Vol={volume}");
+
+                        if (ask <= 0 || bid <= 0)
+                        {
+                            algorithm.Log($"[PUT_REJECT] ask={ask}, bid={bid}, skip invalid quotes");
+                            continue;
+                        }
 
                         var spread = (ask - bid) / ask;
-                        return spread <= _maxBidAskSpread;
-                    }).ToList();
+                        if (volume < _minOptionVolume)
+                        {
+                            algorithm.Log($"[PUT_REJECT] Volume {volume} < {_minOptionVolume}");
+                            continue;
+                        }
+                        if (spread > _maxBidAskSpread)
+                        {
+                            algorithm.Log($"[PUT_REJECT] Spread {spread:P2} > {_maxBidAskSpread:P2}");
+                            continue;
+                        }
 
-                    if (!liquidPuts.Any()) 
-                        continue;
-
-                    var selectedPut = liquidPuts.First();
-                    _protectivePuts[symbol] = selectedPut;
-
-                    var equityShares = Math.Abs(security.Quantity);
-                    var contractsNeeded = Math.Floor(equityShares / 100);
-                    if (contractsNeeded > 0)
-                    {
-                        riskAdjustedTargets.Add(new PortfolioTarget(selectedPut, contractsNeeded));
+                        validPuts.Add(put);
                     }
+                }
+
+                if (!validPuts.Any())
+                {
+                    algorithm.Log($"[PUT_ERROR] {algorithm.Time:yyyy-MM-dd} {symbol.Value}: No valid puts found after liquidity filtering");
+                    continue;
+                }
+
+                var selectedPut = validPuts
+                    .OrderBy(p => Math.Abs(p.ID.StrikePrice - targetPrice))
+                    .First();
+
+                var equityShares = Math.Abs(security.Quantity);
+                var contractsNeeded = Math.Floor(equityShares / 100);
+
+                if (selectedPut.ID.StrikePrice < targetPrice && targetPrice > 0)
+                {
+                    var coverageRatio = selectedPut.ID.StrikePrice / targetPrice;
+                    if (coverageRatio > 0)
+                        contractsNeeded = Math.Floor(contractsNeeded / coverageRatio);
+                }
+
+                if (contractsNeeded > 0)
+                {
+                    _protectivePuts[symbol] = selectedPut;
+                    riskAdjustedTargets.Add(new PortfolioTarget(selectedPut, contractsNeeded));
+                    algorithm.Log($"[PUT_TRADE] {algorithm.Time:yyyy-MM-dd} {symbol.Value}: Put={selectedPut.Value}, Strike={selectedPut.ID.StrikePrice:F2}, Contracts={contractsNeeded}");
+                }
+                else
+                {
+                    algorithm.Log($"[PUT_DEBUG] {algorithm.Time:yyyy-MM-dd} {symbol.Value}: contractsNeeded=0, skip placing put orders");
                 }
             }
 
-            foreach (var kvp in _protectivePuts.ToList())
+            foreach (var kvpProtective in _protectivePuts.ToList())
             {
-                var equitySymbol = kvp.Key;
-                if (!algorithm.Portfolio.ContainsKey(equitySymbol) ||
-                    !algorithm.Portfolio[equitySymbol].Invested)
+                var equitySymbol = kvpProtective.Key;
+                var putSymbol = kvpProtective.Value;
+
+                if (!algorithm.Portfolio.ContainsKey(equitySymbol) || !algorithm.Portfolio[equitySymbol].Invested)
                 {
-                    var putSymbol = kvp.Value;
-                    if (algorithm.Portfolio.ContainsKey(putSymbol) &&
-                        algorithm.Portfolio[putSymbol].Invested)
+                    if (algorithm.Portfolio.ContainsKey(putSymbol) && algorithm.Portfolio[putSymbol].Invested)
                     {
                         riskAdjustedTargets.Add(new PortfolioTarget(putSymbol, 0));
+                        algorithm.Log($"[PUT_LIQUIDATE] {algorithm.Time:yyyy-MM-dd} Liquidate put={putSymbol.Value}, equity={equitySymbol.Value}");
                     }
                     _protectivePuts.Remove(equitySymbol);
                 }
@@ -200,7 +308,6 @@ namespace QuantConnect
         {
             if (_lastRebalance == DateTime.MinValue)
                 return true;
-
             var timeSinceLastRebalance = currentTime - _lastRebalance;
             return timeSinceLastRebalance.Days >= 30;
         }
